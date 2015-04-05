@@ -1,0 +1,7 @@
+*.swp
+*.hi
+*.o
+dist
+cabal.sandbox.config
+.cabal-sandbox
+gh-pages
