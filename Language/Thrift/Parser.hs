@@ -29,8 +29,9 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.State     (StateT)
 import Data.Text               (Text)
-import Text.Trifecta
 import Text.Parser.Token.Style (emptyIdents)
+import Text.Trifecta
+import Text.Trifecta.Delta     (Delta)
 
 import qualified Control.Monad.State as State
 import qualified Data.Text           as Text
@@ -51,6 +52,7 @@ newtype ThriftParser a = ThriftParser (StateT ParserState Parser a)
       , MonadPlus
       , Parsing
       , CharParsing
+      , DeltaParsing
       )
 
 lastDocstring :: ThriftParser T.Docstring
@@ -97,8 +99,11 @@ instance TokenParsing ThriftParser where
               , Text.pack      <$> some (noneOf "/*") >>= loop . (:chunks)
               , Text.singleton <$>        oneOf "/*"  >>= loop . (:chunks)
               ]
+            sanitizeDocstring :: Text -> Text
             sanitizeDocstring =
-              Text.unlines . map (Text.dropWhile (`elem` "* ")) . Text.lines
+                Text.unlines . map (Text.dropWhile ignore) . Text.lines
+              where
+                ignore c = c == '*' || c == ' '
 
 idStyle :: IdentifierStyle ThriftParser
 idStyle = (emptyIdents :: IdentifierStyle ThriftParser)
@@ -109,7 +114,7 @@ idStyle = (emptyIdents :: IdentifierStyle ThriftParser)
 reserved :: Text -> ThriftParser ()
 reserved = reserveText idStyle
 
-program :: ThriftParser (T.Program T.Docstring)
+program :: ThriftParser (T.Program Delta)
 program = whiteSpace >> T.Program <$> many header <*> many definition
 
 literal :: ThriftParser Text
@@ -133,35 +138,37 @@ header = choice [
   , reserved "csharp_namespace" >> T.Namespace "csharp" <$> identifier
   ]
 
-docstring :: ThriftParser (T.Docstring -> a) -> ThriftParser a
-docstring p = lastDocstring >>= \s -> p <*> pure s
+docstring :: ThriftParser (T.Docstring -> Delta -> a) -> ThriftParser a
+docstring p = lastDocstring >>= \s -> do
+    startPosition <- position
+    p <*> pure s <*> pure startPosition
 
-definition :: ThriftParser (T.Definition T.Docstring)
+definition :: ThriftParser (T.Definition Delta)
 definition = choice [constant, typeDefinition, service]
 
-typeDefinition :: ThriftParser (T.Definition T.Docstring)
+typeDefinition :: ThriftParser (T.Definition Delta)
 typeDefinition =
   T.TypeDefinition
     <$> choice [typedef, enum, senum, struct, union, exception]
     <*> typeAnnotations
 
-typedef :: ThriftParser (T.Type T.Docstring)
+typedef :: ThriftParser (T.Type Delta)
 typedef = reserved "typedef" >>
     docstring (T.Typedef <$> fieldType <*> identifier)
 
-enum :: ThriftParser (T.Type T.Docstring)
+enum :: ThriftParser (T.Type Delta)
 enum = reserved "enum" >>
     docstring (T.Enum <$> identifier <*> braces (many enumDef))
 
-struct :: ThriftParser (T.Type T.Docstring)
+struct :: ThriftParser (T.Type Delta)
 struct = reserved "struct" >>
     docstring (T.Struct <$> identifier <*> braces (many field))
 
-union :: ThriftParser (T.Type T.Docstring)
+union :: ThriftParser (T.Type Delta)
 union = reserved "union" >>
     docstring (T.Union <$> identifier <*> braces (many field))
 
-exception :: ThriftParser (T.Type T.Docstring)
+exception :: ThriftParser (T.Type Delta)
 exception = reserved "exception" >>
      docstring (T.Exception <$> identifier <*> braces (many field))
 
@@ -171,7 +178,7 @@ fieldRequiredness = choice [
   , reserved "optional" *> pure T.Optional
   ]
 
-field :: ThriftParser (T.Field T.Docstring)
+field :: ThriftParser (T.Field Delta)
 field = docstring $
   T.Field
     <$> optional (integer <* symbolic ':')
@@ -185,7 +192,7 @@ field = docstring $
 equals :: ThriftParser ()
 equals = void $ symbolic '='
 
-enumDef :: ThriftParser (T.EnumDef T.Docstring)
+enumDef :: ThriftParser (T.EnumDef Delta)
 enumDef = docstring $
   T.EnumDef
     <$> identifier
@@ -193,11 +200,11 @@ enumDef = docstring $
     <*> typeAnnotations
     <*  optionalSep
 
-senum :: ThriftParser (T.Type T.Docstring)
+senum :: ThriftParser (T.Type Delta)
 senum = reserved "senum" >> docstring
     (T.Senum <$> identifier <*> braces (many (literal <* optionalSep)))
 
-constant :: ThriftParser (T.Definition T.Docstring)
+constant :: ThriftParser (T.Definition Delta)
 constant = do
   reserved "const"
   docstring $
@@ -259,7 +266,7 @@ containerType =
     setType = reserved "set" >> angles (T.SetType <$> fieldType)
     listType = reserved "list" >> angles (T.ListType <$> fieldType)
 
-service :: ThriftParser (T.Definition T.Docstring)
+service :: ThriftParser (T.Definition Delta)
 service = do
   reserved "service"
   docstring $
@@ -269,7 +276,7 @@ service = do
         <*> braces (many function)
         <*> typeAnnotations
 
-function :: ThriftParser (T.Function T.Docstring)
+function :: ThriftParser (T.Function Delta)
 function = docstring $
     T.Function
         <$> ((reserved "oneway" *> pure True) <|> pure False)

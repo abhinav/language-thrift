@@ -1,5 +1,5 @@
 name          : language-thrift
-version       : 0.1.0.1
+version       : 0.2.0.0
 synopsis      : Parser for the Thrift IDL format.
 homepage      : https://github.com/abhinav/language-thrift
 license       : BSD3

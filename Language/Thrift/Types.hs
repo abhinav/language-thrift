@@ -32,10 +32,11 @@ data Header
 
 data Definition srcAnnot
     = ConstDefinition
-        { constType     :: FieldType
-        , constName     :: Text
-        , constValue    :: ConstValue
-        , constSrcAnnot :: srcAnnot
+        { constType      :: FieldType
+        , constName      :: Text
+        , constValue     :: ConstValue
+        , constDocstring :: Docstring
+        , constSrcAnnot  :: srcAnnot
         }
     | TypeDefinition
         { typeDefinition  :: Type srcAnnot
@@ -46,40 +47,47 @@ data Definition srcAnnot
         , serviceExtends     :: Maybe Text
         , serviceFunctions   :: [Function srcAnnot]
         , serviceAnnotations :: [TypeAnnotation]
+        , serviceDocstring   :: Docstring
         , serviceSrcAnnot    :: srcAnnot
         }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 data Type srcAnnot
     = Typedef
-        { typedefType     :: FieldType
-        , typedefName     :: Text
-        , typedefSrcAnnot :: srcAnnot
+        { typedefType      :: FieldType
+        , typedefName      :: Text
+        , typedefDocstring :: Docstring
+        , typedefSrcAnnot  :: srcAnnot
         }
     | Enum
-        { enumName     :: Text
-        , enumValues   :: [EnumDef srcAnnot]
-        , enumSrcAnnot :: srcAnnot
+        { enumName      :: Text
+        , enumValues    :: [EnumDef srcAnnot]
+        , enumDocstring :: Docstring
+        , enumSrcAnnot  :: srcAnnot
         }
     | Struct
-        { structName     :: Text
-        , structFields   :: [Field srcAnnot]
-        , structSrcAnnot :: srcAnnot
+        { structName      :: Text
+        , structFields    :: [Field srcAnnot]
+        , structDocstring :: Docstring
+        , structSrcAnnot  :: srcAnnot
         }
     | Union
-        { unionName     :: Text
-        , unionFields   :: [Field srcAnnot]
-        , unionSrcAnnot :: srcAnnot
+        { unionName      :: Text
+        , unionFields    :: [Field srcAnnot]
+        , unionDocstring :: Docstring
+        , unionSrcAnnot  :: srcAnnot
         }
     | Exception
-        { exceptionName     :: Text
-        , exceptionFields   :: [Field srcAnnot]
-        , exceptionSrcAnnot :: srcAnnot
+        { exceptionName      :: Text
+        , exceptionFields    :: [Field srcAnnot]
+        , exceptionDocstring :: Docstring
+        , exceptionSrcAnnot  :: srcAnnot
         }
     | Senum
-        { senumName     :: Text
-        , senumValues   :: [Text]
-        , senumSrcAnnot :: srcAnnot
+        { senumName      :: Text
+        , senumValues    :: [Text]
+        , senumDocstring :: Docstring
+        , senumSrcAnnot  :: srcAnnot
         }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
@@ -93,6 +101,7 @@ data Field srcAnnot = Field
     , fieldName         :: Text
     , fieldDefault      :: Maybe ConstValue
     , fieldAnnotations  :: [TypeAnnotation]
+    , fieldDocstring    :: Docstring
     , fieldSrcAnnot     :: srcAnnot
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
@@ -101,6 +110,7 @@ data EnumDef srcAnnot = EnumDef
     { enumDefName        :: Text
     , enumDefValue       :: Maybe Integer
     , enumDefAnnotations :: [TypeAnnotation]
+    , enumDefDocstring   :: Docstring
     , enumDefSrcAnnot    :: srcAnnot
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
@@ -141,6 +151,7 @@ data Function srcAnnot = Function
     , functionParameters  :: [Field srcAnnot]
     , functionExceptions  :: Maybe [Field srcAnnot]
     , functionAnnotations :: [TypeAnnotation]
+    , functionDocstring   :: Docstring
     , functionSrcAnnot    :: srcAnnot
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
