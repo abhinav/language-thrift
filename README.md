@@ -4,7 +4,6 @@ fails. The parser keeps track of Javadoc-style comments (`/** ... */`) and
 associates them with the type, service, function, or field above which they
 were added.
 
-Documentation is sparse; most of the types are self-explanatory.
 Haddock-generated docs are available on [Hackage][] and [here][].
 
   [Thrift IDL format]: http://thrift.apache.org/docs/idl
