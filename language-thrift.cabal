@@ -15,7 +15,7 @@ description   :
 extra-source-files:
     README.md
     CHANGES.md
---  examples/*.hs   TODO: Add examples
+    examples/*.hs
 
 library
   exposed-modules  : Language.Thrift.Parser
