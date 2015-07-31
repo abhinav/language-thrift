@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 -- |
 -- Module      :  Language.Thrift.Parser
 -- Copyright   :  (c) Abhinav Gupta 2015
@@ -25,7 +26,7 @@
 module Language.Thrift.Parser
     (
 
-      thriftIDLParser
+      thriftIDL
 
     -- * Parser type
 
@@ -57,27 +58,38 @@ module Language.Thrift.Parser
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.Reader    (ReaderT)
 import Control.Monad.State     (StateT)
+import Control.Monad.Trans     (lift)
 import Data.Text               (Text)
+import Text.Parser.Char
+import Text.Parser.Combinators
+import Text.Parser.Token
 import Text.Parser.Token.Style (emptyIdents)
-import Text.Trifecta
-import Text.Trifecta.Delta     (Delta)
 
-import qualified Control.Monad.State as State
-import qualified Data.Text           as Text
+import qualified Control.Monad.Reader as Reader
+import qualified Control.Monad.State  as State
+import qualified Data.Text            as Text
 
 import qualified Language.Thrift.Types as T
 
 
--- | Top level Trifecta parser that is able to parse full Thrift documents.
+-- | Get a top level parser that is able to parse full Thrift documents.
 --
--- Entities defined in the IDL are annotated with 'Delta's which contain
--- location information about those definitions.
+-- Entities defined in the IDL are annotated with @n@ values (determined by
+-- executing @p n@ before the parser for the entity is executed).
 --
--- This may be executed with 'parseFromFile', 'parseString', or other Trifecta
--- variants.
-thriftIDLParser :: Parser (T.Program Delta)
-thriftIDLParser = runThriftParser program
+-- Usage with Trifecta to get entities tagged with location information (see
+-- also, 'Language.Thrift.Parser.Trifecta.thriftIDL'):
+--
+-- > Trifecta.parseFromFile (thriftIDL Trifecta.position) "service.thrift"
+--
+-- Usage with Attoparsec without any annotations:
+--
+-- > Attoparsec.parse (thriftIDL (return ())) document
+--
+thriftIDL :: (MonadPlus p, TokenParsing p) => p n -> p (T.Program n)
+thriftIDL getAnnot = runThriftParser getAnnot program
 
 
 -- | Keeps track of the last docstring seen by the system so that we can
@@ -86,8 +98,11 @@ newtype ParserState = ParserState
   { parserLastDocstring :: T.Docstring
   } deriving (Show, Ord, Eq)
 
--- | A parser that wraps the standard Trifecta parser with extra state.
-newtype ThriftParser a = ThriftParser (StateT ParserState Parser a)
+-- | The ThriftParser wraps another parser @p@ with some extra state. It also
+-- allows injecting a configurable action @(p n)@ which produces annotations
+-- that will be attached to entities in the Thrift file. See 'thriftIDLParser'
+-- for an example.
+newtype ThriftParser p n a = ThriftParser (StateT ParserState (ReaderT (p n) p) a)
     deriving
       ( Functor
       , Applicative
@@ -96,22 +111,30 @@ newtype ThriftParser a = ThriftParser (StateT ParserState Parser a)
       , MonadPlus
       , Parsing
       , CharParsing
-      , DeltaParsing
       )
 
 -- | Returns the last docstring recorded by the system and clears it from the
 -- parser state.
-lastDocstring :: ThriftParser T.Docstring
+lastDocstring :: Monad p => ThriftParser p n T.Docstring
 lastDocstring = ThriftParser $ do
     s <- State.gets parserLastDocstring
     State.put (ParserState Nothing)
     return s
 
--- | Get a Trifecta parser.
-runThriftParser :: ThriftParser a -> Parser a
-runThriftParser (ThriftParser p) = State.evalStateT p (ParserState Nothing)
+-- | Get an exeecutable parser from the given ThriftParser.
+runThriftParser
+    :: (MonadPlus p, TokenParsing p)
+    => p n
+    -- ^ How to get annotations from the underlying parser. If this is not
+    -- something you need to use, make it @return ()@ and generated types will
+    -- be annotated with @()@.
+    -> ThriftParser p n a
+    -> p a
+runThriftParser getAnnot (ThriftParser p) =
+    Reader.runReaderT (State.evalStateT p (ParserState Nothing)) getAnnot
 
-instance TokenParsing ThriftParser where
+
+instance (TokenParsing p, MonadPlus p) => TokenParsing (ThriftParser p n) where
     -- Docstring parsing works by cheating. We define docstrings as
     -- whitespace, but we record it when we move over it. If we run into
     -- another newline or other comments after seeing the docstring's "*/\n",
@@ -159,35 +182,37 @@ instance TokenParsing ThriftParser where
 
 
 -- | Type of identifiers allowed by Thrift.
-idStyle :: IdentifierStyle ThriftParser
-idStyle = (emptyIdents :: IdentifierStyle ThriftParser)
+idStyle
+    :: forall p n. (TokenParsing p, MonadPlus p)
+    => IdentifierStyle (ThriftParser p n)
+idStyle = (emptyIdents :: IdentifierStyle (ThriftParser p n))
     { _styleStart = letter <|> char '_'
     , _styleLetter = alphaNum <|> oneOf "_."
     }
 
 
 -- | Constructor for reserved keywords.
-reserved :: Text -> ThriftParser ()
+reserved :: (TokenParsing p, MonadPlus p) => Text -> ThriftParser p n ()
 reserved = reserveText idStyle
 
 
 -- | Top-level parser to parse complete Thrift documents.
-program :: ThriftParser (T.Program Delta)
+program :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Program n)
 program = whiteSpace >> T.Program <$> many header <*> many definition
 
 
 -- | A string literal. @"hello"@
-literal :: ThriftParser Text
+literal :: (TokenParsing p, MonadPlus p) => ThriftParser p n Text
 literal = stringLiteral <|> stringLiteral'
 
 
 -- | An identifier in a Thrift file.
-identifier :: ThriftParser Text
+identifier :: (TokenParsing p, MonadPlus p) => ThriftParser p n Text
 identifier = ident idStyle
 
 
 -- | Headers defined for the IDL.
-header :: ThriftParser T.Header
+header :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.Header
 header = choice [
     reserved "include" >> T.Include <$> literal
   , reserved "namespace" >>
@@ -209,19 +234,19 @@ header = choice [
 -- > data Foo = Foo { bar :: Bar, doc :: Docstring, pos :: Delta }
 -- >
 -- > parseFoo = docstring $ Foo <$> parseBar
-docstring :: ThriftParser (T.Docstring -> Delta -> a) -> ThriftParser a
+docstring :: Monad p => ThriftParser p n (T.Docstring -> n -> a) -> ThriftParser p n a
 docstring p = lastDocstring >>= \s -> do
-    startPosition <- position
-    p <*> pure s <*> pure startPosition
+    annot <- ThriftParser . lift $ Reader.ask >>= lift
+    p <*> pure s <*> pure annot
 
 
 -- | A constant, type, or service definition.
-definition :: ThriftParser (T.Definition Delta)
+definition :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
 definition = choice [constant, typeDefinition, service]
 
 
 -- | A type definition.
-typeDefinition :: ThriftParser (T.Definition Delta)
+typeDefinition :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
 typeDefinition =
   T.TypeDefinition
     <$> choice [typedef, enum, senum, struct, union, exception]
@@ -231,7 +256,7 @@ typeDefinition =
 -- | A typedef is just an alias for another type.
 --
 -- > typedef common.Foo Bar
-typedef :: ThriftParser (T.Type Delta)
+typedef :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
 typedef = reserved "typedef" >>
     docstring (T.Typedef <$> fieldType <*> identifier)
 
@@ -241,7 +266,7 @@ typedef = reserved "typedef" >>
 -- > enum Role {
 -- >     User = 1, Admin
 -- > }
-enum :: ThriftParser (T.Type Delta)
+enum :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
 enum = reserved "enum" >>
     docstring (T.Enum <$> identifier <*> braces (many enumDef))
 
@@ -252,7 +277,7 @@ enum = reserved "enum" >>
 -- >     1: string name
 -- >     2: Role role = Role.User;
 -- > }
-struct :: ThriftParser (T.Type Delta)
+struct :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
 struct = reserved "struct" >>
     docstring (T.Struct <$> identifier <*> braces (many field))
 
@@ -263,7 +288,7 @@ struct = reserved "struct" >>
 -- >     1: string stringValue;
 -- >     2: i32 intValue;
 -- > }
-union :: ThriftParser (T.Type Delta)
+union :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
 union = reserved "union" >>
     docstring (T.Union <$> identifier <*> braces (many field))
 
@@ -274,20 +299,21 @@ union = reserved "union" >>
 -- >     1: optional string message
 -- >     2: required string username
 -- > }
-exception :: ThriftParser (T.Type Delta)
+exception :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
 exception = reserved "exception" >>
      docstring (T.Exception <$> identifier <*> braces (many field))
 
 
 -- | Whether a field is @required@ or @optional@.
-fieldRequiredness :: ThriftParser T.FieldRequiredness
+fieldRequiredness
+    :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.FieldRequiredness
 fieldRequiredness = choice [
     reserved "required" *> pure T.Required
   , reserved "optional" *> pure T.Optional
   ]
 
 -- | A struct field.
-field :: ThriftParser (T.Field Delta)
+field :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Field n)
 field = docstring $
   T.Field
     <$> optional (integer <* symbolic ':')
@@ -300,7 +326,7 @@ field = docstring $
 
 
 -- | A value defined inside an @enum@.
-enumDef :: ThriftParser (T.EnumDef Delta)
+enumDef :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.EnumDef n)
 enumDef = docstring $
   T.EnumDef
     <$> identifier
@@ -311,7 +337,7 @@ enumDef = docstring $
 
 -- | An string-only enum. These are a deprecated feature of Thrift and
 -- shouldn't be used.
-senum :: ThriftParser (T.Type Delta)
+senum :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
 senum = reserved "senum" >> docstring
     (T.Senum <$> identifier <*> braces (many (literal <* optionalSep)))
 
@@ -319,7 +345,7 @@ senum = reserved "senum" >> docstring
 -- | A 'const' definition.
 --
 -- > const i32 code = 1;
-constant :: ThriftParser (T.Definition Delta)
+constant :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
 constant = do
   reserved "const"
   docstring $
@@ -331,7 +357,7 @@ constant = do
 
 
 -- | A constant value literal.
-constantValue :: ThriftParser T.ConstValue
+constantValue :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.ConstValue
 constantValue = choice [
     either T.ConstInt T.ConstFloat <$> integerOrDouble
   , T.ConstLiteral <$> literal
@@ -341,22 +367,26 @@ constantValue = choice [
   ]
 
 
-constList :: ThriftParser [T.ConstValue]
+constList :: (TokenParsing p, MonadPlus p) => ThriftParser p n [T.ConstValue]
 constList = brackets $ commaSep (constantValue <* optionalSep)
 
 
-constMap :: ThriftParser [(T.ConstValue, T.ConstValue)]
+constMap
+    :: (TokenParsing p, MonadPlus p)
+    => ThriftParser p n [(T.ConstValue, T.ConstValue)]
 constMap = braces $ commaSep constantValuePair
 
 
-constantValuePair :: ThriftParser (T.ConstValue, T.ConstValue)
+constantValuePair
+    :: (TokenParsing p, MonadPlus p)
+    => ThriftParser p n (T.ConstValue, T.ConstValue)
 constantValuePair =
     (,) <$> (constantValue <* colon)
         <*> (constantValue <* optionalSep)
 
 
 -- | A reference to a built-in or defined field.
-fieldType :: ThriftParser T.FieldType
+fieldType :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.FieldType
 fieldType = choice [
     baseType
   , containerType
@@ -364,7 +394,7 @@ fieldType = choice [
   ]
 
 
-baseType :: ThriftParser T.FieldType
+baseType :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.FieldType
 baseType =
     choice [reserved s *> (v <$> typeAnnotations) | (s, v) <- bases]
   where
@@ -381,7 +411,7 @@ baseType =
       ]
 
 
-containerType :: ThriftParser T.FieldType
+containerType :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.FieldType
 containerType =
     choice [mapType, setType, listType] <*> typeAnnotations
   where
@@ -396,7 +426,7 @@ containerType =
 -- > service MyService {
 -- >     // ...
 -- > }
-service :: ThriftParser (T.Definition Delta)
+service :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
 service = do
   reserved "service"
   docstring $
@@ -411,7 +441,7 @@ service = do
 --
 -- > Foo getFoo() throws (1: FooDoesNotExist doesNotExist);
 -- > oneway void putBar(1: Bar bar);
-function :: ThriftParser (T.Function Delta)
+function :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Function n)
 function = docstring $
     T.Function
         <$> ((reserved "oneway" *> pure True) <|> pure False)
@@ -429,21 +459,25 @@ function = docstring $
 --
 -- These do not usually affect code generation but allow for custom logic if
 -- writing your own code generator.
-typeAnnotations :: ThriftParser [T.TypeAnnotation]
+typeAnnotations
+    :: (TokenParsing p, MonadPlus p)
+    => ThriftParser p n [T.TypeAnnotation]
 typeAnnotations = parens (many typeAnnotation) <|> pure []
 
 
-typeAnnotation :: ThriftParser T.TypeAnnotation
+typeAnnotation
+    :: (TokenParsing p, MonadPlus p)
+    => ThriftParser p n T.TypeAnnotation
 typeAnnotation =
     T.TypeAnnotation
         <$> identifier
         <*> (equals *> literal <* optionalSep)
 
 
-optionalSep :: ThriftParser ()
+optionalSep :: (TokenParsing p, MonadPlus p) => ThriftParser p n ()
 optionalSep = void $ optional (comma <|> semi)
 
 
-equals :: ThriftParser ()
+equals :: (TokenParsing p, MonadPlus p) => ThriftParser p n ()
 equals = void $ symbolic '='
 

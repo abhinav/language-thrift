@@ -19,6 +19,7 @@ extra-source-files:
 
 library
   exposed-modules  : Language.Thrift.Parser
+                   , Language.Thrift.Parser.Trifecta
                    , Language.Thrift.Types
   build-depends    : base     >= 4.7  && < 4.9
                    , mtl
