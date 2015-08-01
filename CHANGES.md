@@ -1,3 +1,10 @@
+0.4.0.0
+=======
+
+-   Add pretty printing module.
+-   Rename record for field requiredness from `fieldRequiredNess` to
+    `fieldRequiredness`.
+
 0.3.0.0
 =======
 

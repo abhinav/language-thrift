@@ -201,7 +201,7 @@ data Field srcAnnot = Field
     --
     -- While this is optional, it is recommended that Thrift files always
     -- contain specific field IDs.
-    , fieldRequiredNess :: Maybe FieldRequiredness
+    , fieldRequiredness :: Maybe FieldRequiredness
     -- ^ Whether this field is required or not.
     --
     -- Behavior may differ between languages if requiredness is not specified.

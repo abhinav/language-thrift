@@ -1,6 +1,6 @@
 name          : language-thrift
 version       : 0.3.0.0
-synopsis      : Parser for the Thrift IDL format.
+synopsis      : Parser and pretty printer for the Thrift IDL format.
 homepage      : https://github.com/abhinav/language-thrift
 license       : BSD3
 license-file  : LICENSE
@@ -10,7 +10,7 @@ category      : Language
 build-type    : Simple
 cabal-version : >=1.10
 description   :
-    This package provides a parser for the
+    This package provides a parser and pretty printer for the
     <http://thrift.apache.org/docs/idl Thrift IDL format>.
 extra-source-files:
     README.md
@@ -20,12 +20,14 @@ extra-source-files:
 library
   exposed-modules  : Language.Thrift.Parser
                    , Language.Thrift.Parser.Trifecta
+                   , Language.Thrift.Pretty
                    , Language.Thrift.Types
-  build-depends    : base     >= 4.7  && < 4.9
+  build-depends    : base      >= 4.7  && < 4.9
                    , mtl
-                   , text     >= 1.2
-                   , parsers  >= 0.12 && < 0.13
-                   , trifecta >= 1.5  && < 1.6
+                   , text      >= 1.2
+                   , parsers   >= 0.12 && < 0.13
+                   , trifecta  >= 1.5  && < 1.6
+                   , wl-pprint >= 1.2
   default-language : Haskell2010
 
 source-repository head
