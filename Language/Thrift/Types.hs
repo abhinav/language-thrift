@@ -311,7 +311,7 @@ data Function srcAnnot = Function
 
 -- | Type annoations may be added in various places in the form,
 --
--- > ("foo" = "bar", "baz" = "qux")
+-- > (foo = "bar", baz = "qux")
 --
 -- These do not usually affect code generation but allow for custom logic if
 -- writing your own code generator.

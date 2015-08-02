@@ -47,7 +47,7 @@ header T.Namespace{..} = hsep
 
 
 definition :: Config -> T.Definition ann -> Doc
-definition c T.ConstDefinition{..} = hsep
+definition c T.ConstDefinition{..} = constDocstring $$ hsep
     [ text "const"
     , fieldType c constType
     , text constName
@@ -66,7 +66,7 @@ definition c@Config{indentWidth} T.ServiceDefinition{..} =
   where
     extends = case serviceExtends of
       Nothing -> empty
-      Just name -> space <> text name
+      Just name -> space <> text "extends" <+> text name
 
 
 function :: Config -> T.Function ann -> Doc
@@ -108,7 +108,7 @@ defineType c@Config{indentWidth} t = case t of
       block indentWidth line (map (\f -> field c f <> semi) exceptionFields)
   T.Senum{..} -> senumDocstring $$
     text "senum" <+> text senumName <+>
-      encloseSep indentWidth lbrace rbrace comma (map text senumValues)
+      encloseSep indentWidth lbrace rbrace comma (map literal senumValues)
 
 
 field :: Config -> T.Field ann -> Doc
@@ -168,11 +168,12 @@ constantValue c@Config{indentWidth} value = case value of
   T.ConstIdentifier i -> text i
 
   T.ConstList vs ->
-    encloseSep indentWidth lbracket rbracket comma $ map (constantValue c) vs
+    encloseSep indentWidth lbracket rbracket comma $
+        map (constantValue c) vs
   T.ConstMap vs ->
-    encloseSep indentWidth lbrace rbrace comma $ map keyValuePair vs
-  where
-    keyValuePair (k, v) = constantValue c k <> colon <+> constantValue c v
+    encloseSep indentWidth lbrace rbrace comma $
+      map (\(k, v) -> constantValue c k <> colon <+> constantValue c v)
+          vs
 
 
 typeAnnots :: Config -> [T.TypeAnnotation] -> Doc
@@ -183,7 +184,7 @@ typeAnnots Config{indentWidth} anns =
 
 typeAnnot :: T.TypeAnnotation -> Doc
 typeAnnot T.TypeAnnotation{..} =
-    literal typeAnnotationName <+> equals <+> literal typeAnnotationValue
+    text typeAnnotationName <+> equals <+> literal typeAnnotationValue
 
 
 literal :: Text -> Doc
@@ -195,7 +196,7 @@ text = PP.text . unpack
 
 ($$) :: T.Docstring -> Doc -> Doc
 ($$) Nothing y = y
-($$) (Just t) y = case Text.lines t of
+($$) (Just t) y = case Text.lines (Text.strip t) of
   [] -> y
   ls -> wrapComments ls <$> y
   where

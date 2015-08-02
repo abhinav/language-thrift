@@ -176,9 +176,10 @@ instance (TokenParsing p, MonadPlus p) => TokenParsing (ThriftParser p n) where
               ]
             sanitizeDocstring :: Text -> Text
             sanitizeDocstring =
-                Text.unlines . map (Text.dropWhile ignore) . Text.lines
-              where
-                ignore c = c == '*' || c == ' '
+                Text.intercalate "\n"
+              . map (Text.dropWhile ignore)
+              . Text.lines
+              where ignore c = c == '*' || c == ' '
 
 
 -- | Type of identifiers allowed by Thrift.
@@ -234,7 +235,9 @@ header = choice [
 -- > data Foo = Foo { bar :: Bar, doc :: Docstring, pos :: Delta }
 -- >
 -- > parseFoo = docstring $ Foo <$> parseBar
-docstring :: Monad p => ThriftParser p n (T.Docstring -> n -> a) -> ThriftParser p n a
+docstring
+    :: (Functor p, Monad p)
+    => ThriftParser p n (T.Docstring -> n -> a) -> ThriftParser p n a
 docstring p = lastDocstring >>= \s -> do
     annot <- ThriftParser . lift $ Reader.ask >>= lift
     p <*> pure s <*> pure annot
@@ -368,13 +371,27 @@ constantValue = choice [
 
 
 constList :: (TokenParsing p, MonadPlus p) => ThriftParser p n [T.ConstValue]
-constList = brackets $ commaSep (constantValue <* optionalSep)
+constList = symbolic '[' *> loop []
+  where
+    loop xs = choice [
+        symbolic ']' *> return (reverse xs)
+      , (:) <$> (constantValue <* optionalSep)
+            <*> pure xs
+            >>= loop
+      ]
 
 
 constMap
     :: (TokenParsing p, MonadPlus p)
     => ThriftParser p n [(T.ConstValue, T.ConstValue)]
-constMap = braces $ commaSep constantValuePair
+constMap = symbolic '{' *> loop []
+  where
+    loop xs = choice [
+        symbolic '}' *> return (reverse xs)
+      , (:) <$> (constantValuePair <* optionalSep)
+            <*> pure xs
+            >>= loop
+      ]
 
 
 constantValuePair
@@ -455,7 +472,7 @@ function = docstring $
 
 -- | Type annotations on entitites.
 --
--- > ("foo" = "bar", "baz" = "qux")
+-- > (foo = "bar", baz = "qux")
 --
 -- These do not usually affect code generation but allow for custom logic if
 -- writing your own code generator.
