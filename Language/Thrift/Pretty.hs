@@ -10,11 +10,29 @@
 -- Maintainer  :  Abhinav Gupta <mail@abhinavg.net>
 -- Stability   :  experimental
 --
--- This module provides a pretty printer for Thrift IDLs.
+-- This module provides a pretty printer for Thrift IDLs. The pretty printer
+-- prserves docstrings specified for types.
 --
 -- The specifics of the printer can be configured using 'Config' objects.
 --
-module Language.Thrift.Pretty where
+module Language.Thrift.Pretty
+    (
+      prettyPrint
+
+    -- * Components
+
+    , program
+    , header
+    , definition
+    , function
+    , fieldType
+    , constantValue
+
+    -- * Configuration
+
+    , Config(..)
+    , defaultConfig
+    ) where
 
 #if __GLASGOW_HASKELL__ >= 709
 import Prelude hiding ((<$>))
@@ -28,17 +46,32 @@ import qualified Language.Thrift.Types   as T
 import qualified Text.PrettyPrint.Leijen as PP
 
 
+-- | Configuration for the pretty printer.
 data Config = Config
     { indentWidth :: Int
-    }
+    -- ^ Number of spaces to use for indentation.
+    } deriving (Show, Ord, Eq)
 
 
+-- | Default pretty printing configuration.
+defaultConfig :: Config
+defaultConfig = Config 4
+
+
+-- | Top-level pretty printer for Thrift documents that uses the default
+-- configuration ('defaultConfig') for pretty printing.
+prettyPrint :: T.Program ann -> Doc
+prettyPrint = program defaultConfig
+
+
+-- | Pretty print a Thrift IDL.
 program :: Config -> T.Program ann -> Doc
 program c T.Program{..} =
     vsep (map header programHeaders) <$> line <>
     map (definition c) programDefinitions `sepBy` (line <> line)
 
 
+-- | Print the headers for a program.
 header :: T.Header -> Doc
 header T.Include{..} =
     text "include" <+> literal includePath
@@ -46,6 +79,7 @@ header T.Namespace{..} = hsep
     [text "namespace", text namespaceLanguage, text namespaceName]
 
 
+-- | Print a constant, type, or service definition.
 definition :: Config -> T.Definition ann -> Doc
 definition c T.ConstDefinition{..} = constDocstring $$ hsep
     [ text "const"
@@ -55,8 +89,8 @@ definition c T.ConstDefinition{..} = constDocstring $$ hsep
     , constantValue c constValue
     ]
 
-definition c T.TypeDefinition{..} =
-    defineType c typeDefinition <> typeAnnots c typeAnnotations
+definition c T.TypeDefinition{typeDefinition = def, ..} =
+    typeDefinition c def <> typeAnnots c typeAnnotations
 
 definition c@Config{indentWidth} T.ServiceDefinition{..} =
   serviceDocstring $$
@@ -69,6 +103,8 @@ definition c@Config{indentWidth} T.ServiceDefinition{..} =
       Just name -> space <> text "extends" <+> text name
 
 
+-- | Pretty print a function definition.
+--
 function :: Config -> T.Function ann -> Doc
 function c@Config{indentWidth} T.Function{..} = functionDocstring $$
   oneway <> returnType <+> text functionName <>
@@ -90,8 +126,8 @@ function c@Config{indentWidth} T.Function{..} = functionDocstring $$
           else empty
 
 
-defineType :: Config -> T.Type ann -> Doc
-defineType c@Config{indentWidth} t = case t of
+typeDefinition :: Config -> T.Type ann -> Doc
+typeDefinition c@Config{indentWidth} t = case t of
   T.Typedef{..} -> typedefDocstring $$
     text "typedef" <+> fieldType c typedefType <+> text typedefName
   T.Enum{..} -> enumDocstring $$
@@ -137,6 +173,7 @@ enumValue c T.EnumDef{..} = enumDefDocstring $$
       Just v  -> space <> text "=" <+> integer v
 
 
+-- | Pretty print a field type.
 fieldType :: Config -> T.FieldType -> Doc
 fieldType c ft = case ft of
   T.DefinedType t -> text t
@@ -160,6 +197,7 @@ fieldType c ft = case ft of
     text "list" <> angles (fieldType c v) <> typeAnnots c anns
 
 
+-- | Pretty print a constant value.
 constantValue :: Config -> T.ConstValue -> Doc
 constantValue c@Config{indentWidth} value = case value of
   T.ConstInt i -> integer i
@@ -189,6 +227,7 @@ typeAnnot T.TypeAnnotation{..} =
 
 literal :: Text -> Doc
 literal = dquotes . text
+    -- TODO: escaping?
 
 text :: Text -> Doc
 text = PP.text . unpack

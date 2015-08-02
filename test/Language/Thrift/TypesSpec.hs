@@ -32,7 +32,7 @@ import qualified Language.Thrift.Types  as T
 -- Generally speaking, it's a good idea to use this for calls that will
 -- recursively generate lists of things so that they terminate at some point.
 halfSize :: Gen a -> Gen a
-halfSize = scale (\n -> truncate (fromIntegral n / 2))
+halfSize = scale (\n -> truncate (fromIntegral n / 2 :: Double))
 
 newtype Identifier = Identifier { getIdentifier :: Text }
 
@@ -54,7 +54,6 @@ instance Arbitrary Docstring where
                 then return Nothing
                 else return (Just s)
 
-        charset = '\n':' ':['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9']
 
 instance Arbitrary (T.Program ()) where
     arbitrary = T.Program <$> arbitrary <*> arbitrary
@@ -228,10 +227,9 @@ instance Arbitrary FiniteConstValue where
       where
         basicConsts = getBasicConstValue <$> arbitrary
         constList
-            = sized $ \s -> listOf $ halfSize $
-                getFiniteConstValue <$> arbitrary
+            = listOf $ halfSize $ getFiniteConstValue <$> arbitrary
         constMap
-            = sized $ \s -> listOf $
+            = listOf $
                 (,) <$> basicConsts
                     <*> halfSize (getFiniteConstValue <$> arbitrary)
 
@@ -243,20 +241,12 @@ instance Arbitrary T.ConstValue where
 spec :: Spec
 spec =
     describe "Can round trip" $ do
-        prop "enum defs" $
-            roundtrip PP.enumValue (Tri.whiteSpace *> P.enumDef)
 
         prop "field types" $
             roundtrip PP.fieldType P.fieldType
 
         prop "constant values" $
             roundtrip PP.constantValue P.constantValue
-
-        prop "type annotations" $
-            roundtrip PP.typeAnnots (Tri.whiteSpace *> P.typeAnnotations)
-
-        prop "fields" $
-            roundtrip PP.field (Tri.whiteSpace *> P.field)
 
         prop "functions" $
             roundtrip PP.function (Tri.whiteSpace *> P.function)

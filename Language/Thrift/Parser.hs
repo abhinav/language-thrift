@@ -24,36 +24,21 @@
 -- for example, you could define a string value for an int constant.
 --
 module Language.Thrift.Parser
-    (
+    ( thriftIDL
 
-      thriftIDL
-
-    -- * Parser type
-
-    , ThriftParser
-    , runThriftParser
-
-    -- * Parser components
+    -- * Components
 
     , program
     , header
     , definition
-    , typeDefinition
-    , typedef
-    , enum
-    , enumDef
-    , senum
-    , struct
-    , union
-    , exception
-    , fieldRequiredness
-    , fieldType
-    , field
-    , constant
-    , constantValue
-    , service
     , function
-    , typeAnnotations
+    , fieldType
+    , constantValue
+
+    -- * Parser
+
+    , ThriftParser
+    , runThriftParser
     ) where
 
 import Control.Applicative
