@@ -1,5 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -11,6 +13,8 @@ import Control.Applicative
 
 import Control.Monad           (unless)
 import Data.Text               (Text)
+import Data.Typeable           (Typeable)
+import GHC.Generics            (Generic)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
@@ -37,9 +41,21 @@ halfSize = scale (\n -> truncate (fromIntegral n / 2 :: Double))
 newtype Identifier = Identifier { getIdentifier :: Text }
 
 instance Arbitrary Identifier where
-    arbitrary = Identifier . Text.pack <$> listOf1 (elements charset)
+    arbitrary = Identifier <$> arbitrary
+    shrink (Identifier t) = [Identifier t' | t' <- shrink t]
+
+instance Arbitrary Text where
+    arbitrary = Text.pack <$> listOf1 (elements charset)
       where
         charset = ['a'..'z'] ++ ['A'..'Z']
+    shrink t
+        | Text.length t < 2 = []
+        | otherwise =
+               [xs]
+            ++ [Text.cons x xs' | xs' <- shrink xs]
+            ++ [Text.cons x' xs | x' <- shrink x]
+          where
+            Just (x, xs) = Text.uncons t
 
 newtype Docstring = Docstring { getDocstring :: Maybe Text }
 
@@ -54,12 +70,16 @@ instance Arbitrary Docstring where
                 then return Nothing
                 else return (Just s)
 
+    shrink (Docstring t) = [Docstring x | x <- shrink t]
+
 
 instance Arbitrary (T.Program ()) where
+    shrink = genericShrink
     arbitrary = T.Program <$> arbitrary <*> arbitrary
 
 
 instance Arbitrary (T.Definition ()) where
+    shrink = genericShrink
     arbitrary = oneof [arbitraryConst, arbitraryType, arbitraryService]
       where
         arbitraryConst =
@@ -86,6 +106,7 @@ instance Arbitrary (T.Definition ()) where
 
 
 instance Arbitrary T.Header where
+    shrink = genericShrink
     arbitrary = oneof
         [ T.Include   <$> (getIdentifier <$> arbitrary)
         , T.Namespace <$> elements scopes
@@ -96,6 +117,7 @@ instance Arbitrary T.Header where
 
 
 instance Arbitrary (T.Field ()) where
+    shrink = genericShrink
     arbitrary =
         T.Field
             <$> (fmap getPositive <$> arbitrary)
@@ -109,6 +131,7 @@ instance Arbitrary (T.Field ()) where
 
 
 instance Arbitrary (T.Function ()) where
+    shrink = genericShrink
     arbitrary =
         T.Function
             <$> elements [True, False]
@@ -122,6 +145,7 @@ instance Arbitrary (T.Function ()) where
 
 
 instance Arbitrary T.TypeAnnotation where
+    shrink = genericShrink
     arbitrary =
         T.TypeAnnotation
             <$> (getIdentifier <$> arbitrary)
@@ -129,6 +153,7 @@ instance Arbitrary T.TypeAnnotation where
 
 
 instance Arbitrary (T.EnumDef ()) where
+    shrink = genericShrink
     arbitrary =
         T.EnumDef
             <$> (getIdentifier <$> arbitrary)
@@ -139,6 +164,7 @@ instance Arbitrary (T.EnumDef ()) where
 
 
 instance Arbitrary (T.Type ()) where
+    shrink = genericShrink
     arbitrary = oneof
         [ T.Typedef
             <$> arbitrary
@@ -174,9 +200,11 @@ instance Arbitrary (T.Type ()) where
 
 
 instance Arbitrary (T.FieldRequiredness) where
+    shrink = genericShrink
     arbitrary = elements [T.Required, T.Optional]
 
 instance Arbitrary T.FieldType where
+    shrink = genericShrink
     arbitrary = oneof
         [ T.DefinedType . getIdentifier <$> arbitrary
 
@@ -201,10 +229,11 @@ instance Arbitrary T.FieldType where
 
 newtype BasicConstValue = BasicConstValue {
     getBasicConstValue :: T.ConstValue
-  }
+  } deriving (Typeable, Generic)
 
 
 instance Arbitrary BasicConstValue where
+    shrink = genericShrink
     arbitrary = BasicConstValue <$> oneof
         [ T.ConstFloat                      <$> choose (0.0, 10000.0)
         , T.ConstInt                        <$> arbitrary
@@ -216,9 +245,10 @@ instance Arbitrary BasicConstValue where
 -- and maps that go on forever.
 newtype FiniteConstValue =
     FiniteConstValue { getFiniteConstValue :: T.ConstValue }
-
+  deriving (Typeable, Generic)
 
 instance Arbitrary FiniteConstValue where
+    shrink = genericShrink
     arbitrary = FiniteConstValue <$> oneof
         [ basicConsts
         , T.ConstList <$> constList
@@ -235,6 +265,7 @@ instance Arbitrary FiniteConstValue where
 
 
 instance Arbitrary T.ConstValue where
+    shrink = genericShrink
     arbitrary = getFiniteConstValue <$> arbitrary
 
 
