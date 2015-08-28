@@ -11,6 +11,8 @@ The pretty printer uses [wl-pprint].
 
 Haddock-generated docs are available on [Hackage] and [here].
 
+[![Build Status](https://travis-ci.org/abhinav/language-thrift.svg?branch=master)](https://travis-ci.org/abhinav/language-thrift)
+
   [Thrift IDL format]: http://thrift.apache.org/docs/idl
   [`parsers`]: http://hackage.haskell.org/package/parsers
   [`trifecta`]: http://hackage.haskell.org/package/trifecta
