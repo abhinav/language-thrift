@@ -34,8 +34,9 @@ library
 test-suite spec
   type           : exitcode-stdio-1.0
   hs-source-dirs : test
-  main-is        : Spec.hs
+  main-is        : Main.hs
   other-modules  : Language.Thrift.TypesSpec
+                 , Spec
   build-depends  : base
                  , hspec          >= 2.0
                  , hspec-discover >= 2.1

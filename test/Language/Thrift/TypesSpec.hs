@@ -31,6 +31,11 @@ import qualified Language.Thrift.Pretty as PP
 import qualified Language.Thrift.Types  as T
 
 
+#if !MIN_VERSION_QuickCheck(2, 8, 0)
+scale :: (Int -> Int) -> Gen a -> Gen a
+scale f g = sized (\n -> resize (f n) g)
+#endif
+
 -- | Halve the maximum size of generated values.
 --
 -- Generally speaking, it's a good idea to use this for calls that will
