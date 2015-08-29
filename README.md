@@ -1,3 +1,5 @@
+[![build-status]](https://travis-ci.org/abhinav/language-thrift)
+
 `language-thrift` provides a parser and pretty printer for the [Thrift IDL
 format]. In addition to parsing the IDL, it keeps track of Javadoc-style
 comments (`/** ... */`) and attaches them to the type, service, function, or
@@ -11,8 +13,7 @@ The pretty printer uses [wl-pprint].
 
 Haddock-generated docs are available on [Hackage] and [here].
 
-[![Build Status](https://travis-ci.org/abhinav/language-thrift.svg?branch=master)](https://travis-ci.org/abhinav/language-thrift)
-
+  [build-status]: https://travis-ci.org/abhinav/language-thrift.svg?branch=master
   [Thrift IDL format]: http://thrift.apache.org/docs/idl
   [`parsers`]: http://hackage.haskell.org/package/parsers
   [`trifecta`]: http://hackage.haskell.org/package/trifecta
