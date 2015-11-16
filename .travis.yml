@@ -20,7 +20,7 @@ before_install:
     - export PATH=/opt/ghc/$GHCVER/bin:$PATH
     - export PATH=~/.local/bin:$PATH
     - mkdir -p ~/.local/bin
-    - travis_retrytravis_retry curl -L https://github.com/commercialhaskell/stack/releases/download/v0.1.6.0/stack-0.1.6.0-linux-x86_64.tar.gz | gunzip | tar -x
+    - travis_retry curl -L https://github.com/commercialhaskell/stack/releases/download/v0.1.6.0/stack-0.1.6.0-linux-x86_64.tar.gz | gunzip | tar -x
     - mv stack-0.1.6.0-linux-x86_64/stack ~/.local/bin/stack
     - chmod a+x ~/.local/bin/stack
     - ghc --version
