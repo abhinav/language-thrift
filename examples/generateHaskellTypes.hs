@@ -49,11 +49,11 @@ list = encloseSep lbracket rbracket (text ", ")
 tupled :: [Doc] -> Doc
 tupled = encloseSep lparen rparen (text ", ")
 
-renderConstValue :: ConstValue -> Doc
+renderConstValue :: ConstValue a -> Doc
 renderConstValue (ConstInt i) = integer i
 renderConstValue (ConstFloat f) = double f
 renderConstValue (ConstLiteral l) = dquotes $ text (unpack l) -- TODO escaping
-renderConstValue (ConstIdentifier i) = text (unpack i)
+renderConstValue (ConstIdentifier i _) = text (unpack i)
 renderConstValue (ConstList l) = list (map renderConstValue l)
 renderConstValue (ConstMap m) = text "Map.fromList" <+> list (map renderConstTuple m)
   where
@@ -62,8 +62,8 @@ renderConstValue (ConstMap m) = text "Map.fromList" <+> list (map renderConstTup
       , renderConstValue b
       ]
 
-renderFieldType :: FieldType -> Doc
-renderFieldType (DefinedType t) = text (unpack t)
+renderFieldType :: Show a => FieldType a -> Doc
+renderFieldType (DefinedType t _) = text (unpack t)
 renderFieldType (StringType _) = text "Text"
 renderFieldType (BinaryType _) = text "ByteString"
 renderFieldType (BoolType _) = text "Bool"

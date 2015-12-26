@@ -110,12 +110,13 @@ instance Arbitrary (T.Definition ()) where
                 <*> pure ()
 
 
-instance Arbitrary T.Header where
+instance Arbitrary (T.Header ()) where
     shrink = genericShrink
     arbitrary = oneof
-        [ T.Include   <$> (getIdentifier <$> arbitrary)
+        [ T.Include   <$> (getIdentifier <$> arbitrary) <*> pure ()
         , T.Namespace <$> elements scopes
                       <*> (getIdentifier <$> arbitrary)
+                      <*> pure ()
         ]
       where
         scopes = ["py", "rb", "java", "hs", "cpp"]
@@ -154,7 +155,7 @@ instance Arbitrary T.TypeAnnotation where
     arbitrary =
         T.TypeAnnotation
             <$> (getIdentifier <$> arbitrary)
-            <*> (getIdentifier <$> arbitrary)
+            <*> (fmap getIdentifier <$> arbitrary)
 
 
 instance Arbitrary (T.EnumDef ()) where
@@ -208,10 +209,10 @@ instance Arbitrary (T.FieldRequiredness) where
     shrink = genericShrink
     arbitrary = elements [T.Required, T.Optional]
 
-instance Arbitrary T.FieldType where
+instance Arbitrary (T.FieldType ()) where
     shrink = genericShrink
     arbitrary = oneof
-        [ T.DefinedType . getIdentifier <$> arbitrary
+        [ T.DefinedType . getIdentifier <$> arbitrary <*> pure ()
 
         , T.StringType <$> arbitrary
         , T.BinaryType <$> arbitrary
@@ -233,7 +234,7 @@ instance Arbitrary T.FieldType where
 
 
 newtype BasicConstValue = BasicConstValue {
-    getBasicConstValue :: T.ConstValue
+    getBasicConstValue :: T.ConstValue ()
   } deriving (Typeable, Generic)
 
 
@@ -243,13 +244,13 @@ instance Arbitrary BasicConstValue where
         [ T.ConstFloat                      <$> choose (0.0, 10000.0)
         , T.ConstInt                        <$> arbitrary
         , T.ConstLiteral    . getIdentifier <$> arbitrary
-        , T.ConstIdentifier . getIdentifier <$> arbitrary
+        , T.ConstIdentifier . getIdentifier <$> arbitrary <*> pure ()
         ]
 
 -- | newtype wrapper around const values so that we're not generating lists
 -- and maps that go on forever.
 newtype FiniteConstValue =
-    FiniteConstValue { getFiniteConstValue :: T.ConstValue }
+    FiniteConstValue { getFiniteConstValue :: T.ConstValue () }
   deriving (Typeable, Generic)
 
 instance Arbitrary FiniteConstValue where
@@ -269,7 +270,7 @@ instance Arbitrary FiniteConstValue where
                     <*> halfSize (getFiniteConstValue <$> arbitrary)
 
 
-instance Arbitrary T.ConstValue where
+instance Arbitrary (T.ConstValue ()) where
     shrink = genericShrink
     arbitrary = getFiniteConstValue <$> arbitrary
 

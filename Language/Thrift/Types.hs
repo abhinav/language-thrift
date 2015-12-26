@@ -31,7 +31,7 @@ import GHC.Generics (Generic)
 
 -- | A program represents a single Thrift document.
 data Program srcAnnot = Program
-    { programHeaders     :: [Header]
+    { programHeaders     :: [Header srcAnnot]
     -- ^ Headers in a document define includes and namespaces.
     , programDefinitions :: [Definition srcAnnot]
     -- ^ Types and services defined in the document.
@@ -39,7 +39,7 @@ data Program srcAnnot = Program
     deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 -- | Headers for a program.
-data Header
+data Header srcAnnot
     = -- | The IDL includes another Thrift file.
       --
       -- > include "common.thrift"
@@ -49,6 +49,7 @@ data Header
       Include
         { includePath :: Text
         -- ^ Path to the included file.
+        , includeSrcAnnot :: srcAnnot
         }
     | -- | Namespace directives allows control of the namespace or package
       -- name used by the generated code for certain languages.
@@ -61,6 +62,7 @@ data Header
         , namespaceName     :: Text
         -- ^ Namespace or package path to use in the generated code for that
         -- language.
+        , namespaceSrcAnnot :: srcAnnot
         }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
@@ -71,11 +73,11 @@ data Definition srcAnnot
       --
       -- > const i32 code = 1;
       ConstDefinition
-        { constType      :: FieldType
+        { constType      :: FieldType srcAnnot
         -- ^ Type of the constant.
         , constName      :: Text
         -- ^ Name of the constant.
-        , constValue     :: ConstValue
+        , constValue     :: ConstValue srcAnnot
         -- ^ Value of the constant.
         , constDocstring :: Docstring
         -- ^ Documentation.
@@ -114,7 +116,7 @@ data Type srcAnnot
       --
       -- > typedef common.Foo Bar
       Typedef
-        { typedefType      :: FieldType
+        { typedefType      :: FieldType srcAnnot
         -- ^ The aliased type.
         , typedefName      :: Text
         -- ^ Name of the new type.
@@ -207,11 +209,11 @@ data Field srcAnnot = Field
     -- Behavior may differ between languages if requiredness is not specified.
     -- Therefore it's recommended that requiredness for a field is always
     -- specified.
-    , fieldType         :: FieldType
+    , fieldType         :: FieldType srcAnnot
     -- ^ Type of value the field holds.
     , fieldName         :: Text
     -- ^ Name of the field.
-    , fieldDefault      :: Maybe ConstValue
+    , fieldDefault      :: Maybe (ConstValue srcAnnot)
     -- ^ Default value of the field, if any.
     , fieldAnnotations  :: [TypeAnnotation]
     -- ^ Field annotations.
@@ -239,25 +241,25 @@ data EnumDef srcAnnot = EnumDef
 -- maps can be presented in Thrift files as literals.
 --
 -- Constants are used for IDL-level constants and default values for fields.
-data ConstValue
+data ConstValue srcAnnot
     = ConstInt Integer
     -- ^ An integer. @42@
     | ConstFloat Double
     -- ^ A float. @4.2@
     | ConstLiteral Text
     -- ^ A literal string. @"hello"@
-    | ConstIdentifier Text
-    -- ^ A literal identifier. @hello@
-    | ConstList [ConstValue]
+    | ConstIdentifier Text srcAnnot
+    -- ^ A reference to another constant. @Foo.bar@
+    | ConstList [ConstValue srcAnnot]
     -- ^ A literal list containing other constant values. @[42]@
-    | ConstMap [(ConstValue, ConstValue)]
+    | ConstMap [(ConstValue srcAnnot, ConstValue srcAnnot)]
     -- ^ A literal list containing other constant values.
     -- @{"hellO": 1, "world": 2}@
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 -- | A reference to a type.
-data FieldType
-    = DefinedType Text
+data FieldType srcAnnot
+    = DefinedType Text srcAnnot
     -- ^ A custom defined type referred to by name.
 
     | StringType [TypeAnnotation]
@@ -280,11 +282,11 @@ data FieldType
     -- ^ @double@ and annotations.
 
     -- Container types
-    | MapType FieldType FieldType [TypeAnnotation]
+    | MapType (FieldType srcAnnot) (FieldType srcAnnot) [TypeAnnotation]
     -- ^ @map\<foo, bar\>@ and annotations.
-    | SetType FieldType [TypeAnnotation]
+    | SetType (FieldType srcAnnot) [TypeAnnotation]
     -- ^ @set\<baz\>@ and annotations.
-    | ListType FieldType [TypeAnnotation]
+    | ListType (FieldType srcAnnot) [TypeAnnotation]
     -- ^ @list\<qux\>@ and annotations.
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
@@ -293,7 +295,7 @@ data Function srcAnnot = Function
     { functionOneWay      :: Bool
     -- ^ Whether the function is @oneway@. If it's one way, it cannot receive
     -- repsonses.
-    , functionReturnType  :: Maybe FieldType
+    , functionReturnType  :: Maybe (FieldType srcAnnot)
     -- ^ Return type of the function, or @Nothing@ if it's @void@ or @oneway@.
     , functionName        :: Text
     -- ^ Name of the function.
@@ -311,14 +313,14 @@ data Function srcAnnot = Function
 
 -- | Type annoations may be added in various places in the form,
 --
--- > (foo = "bar", baz = "qux")
+-- > (foo = "bar", baz, qux = "quux")
 --
 -- These do not usually affect code generation but allow for custom logic if
 -- writing your own code generator.
 data TypeAnnotation = TypeAnnotation
     { typeAnnotationName  :: Text
     -- ^ Name of the annotation.
-    , typeAnnotationValue :: Text
+    , typeAnnotationValue :: Maybe Text
     -- ^ Value for the annotation.
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)

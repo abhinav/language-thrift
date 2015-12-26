@@ -72,7 +72,7 @@ program c T.Program{..} =
 
 
 -- | Print the headers for a program.
-header :: T.Header -> Doc
+header :: T.Header ann -> Doc
 header T.Include{..} =
     text "include" <+> literal includePath
 header T.Namespace{..} = hsep
@@ -174,9 +174,9 @@ enumValue c T.EnumDef{..} = enumDefDocstring $$
 
 
 -- | Pretty print a field type.
-fieldType :: Config -> T.FieldType -> Doc
+fieldType :: Config -> T.FieldType ann -> Doc
 fieldType c ft = case ft of
-  T.DefinedType t -> text t
+  T.DefinedType t _ -> text t
 
   T.StringType anns -> text "string" <> typeAnnots c anns
   T.BinaryType anns -> text "binary" <> typeAnnots c anns
@@ -198,12 +198,12 @@ fieldType c ft = case ft of
 
 
 -- | Pretty print a constant value.
-constantValue :: Config -> T.ConstValue -> Doc
+constantValue :: Config -> T.ConstValue ann -> Doc
 constantValue c@Config{indentWidth} value = case value of
   T.ConstInt i -> integer i
   T.ConstFloat f -> double f
   T.ConstLiteral l -> literal l
-  T.ConstIdentifier i -> text i
+  T.ConstIdentifier i _ -> text i
 
   T.ConstList vs ->
     encloseSep indentWidth lbracket rbracket comma $
@@ -222,7 +222,11 @@ typeAnnots Config{indentWidth} anns =
 
 typeAnnot :: T.TypeAnnotation -> Doc
 typeAnnot T.TypeAnnotation{..} =
-    text typeAnnotationName <+> equals <+> literal typeAnnotationValue
+    text typeAnnotationName <> value
+  where
+    value = case typeAnnotationValue of
+        Nothing -> empty
+        Just v  -> space <> equals <+> literal v
 
 
 literal :: Text -> Doc

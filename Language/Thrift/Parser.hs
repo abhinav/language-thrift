@@ -198,24 +198,37 @@ identifier = ident idStyle
 
 
 -- | Headers defined for the IDL.
-header :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.Header
+header :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Header n)
 header = choice [
-    reserved "include" >> T.Include <$> literal
+    reserved "include" >> withSrcAnnot (T.Include <$> literal)
   , reserved "namespace" >>
-      T.Namespace <$> (text "*" <|> identifier) <*> identifier
-  , reserved "cpp_namespace" >> T.Namespace "cpp" <$> identifier
-  , reserved "php_namespace" >> T.Namespace "php" <$> identifier
-  , reserved "py_module" >> T.Namespace "py" <$> identifier
-  , reserved "perl_package" >> T.Namespace "perl" <$> identifier
-  , reserved "ruby_namespace" >> T.Namespace "rb" <$> identifier
-  , reserved "java_package" >> T.Namespace "java" <$> identifier
-  , reserved "cocoa_package" >> T.Namespace "cocoa" <$> identifier
-  , reserved "csharp_namespace" >> T.Namespace "csharp" <$> identifier
+    withSrcAnnot (T.Namespace <$> (text "*" <|> identifier) <*> identifier)
+  , reserved "cpp_namespace" >> withSrcAnnot (T.Namespace "cpp" <$> identifier)
+  , reserved "php_namespace" >> withSrcAnnot (T.Namespace "php" <$> identifier)
+  , reserved "py_module" >> withSrcAnnot (T.Namespace "py" <$> identifier)
+  , reserved "perl_package" >> withSrcAnnot (T.Namespace "perl" <$> identifier)
+  , reserved "ruby_namespace" >> withSrcAnnot (T.Namespace "rb" <$> identifier)
+  , reserved "java_package" >> withSrcAnnot (T.Namespace "java" <$> identifier)
+  , reserved "cocoa_package" >>
+    withSrcAnnot (T.Namespace "cocoa" <$> identifier)
+  , reserved "csharp_namespace" >>
+    withSrcAnnot (T.Namespace "csharp" <$> identifier)
   ]
 
+-- | Retrieve the current source annotation.
+getSrcAnnot :: Monad p => ThriftParser p n n
+getSrcAnnot = ThriftParser . lift $ Reader.ask >>= lift
 
--- | Convenience wrapper for parsers that expect a docstring and a location
--- 'Delta'.
+-- | Convenience wrapper for parsers expecting a source annotation.
+--
+-- The source annotation will be retrieved BEFORE the parser itself is executed.
+withSrcAnnot
+    :: (Functor p, Monad p)
+    => ThriftParser p n (n -> a) -> ThriftParser p n a
+withSrcAnnot p = getSrcAnnot >>= \annot -> p <*> pure annot
+
+-- | Convenience wrapper for parsers that expect a docstring and a
+-- source annotation.
 --
 -- > data Foo = Foo { bar :: Bar, doc :: Docstring, pos :: Delta }
 -- >
@@ -224,7 +237,7 @@ docstring
     :: (Functor p, Monad p)
     => ThriftParser p n (T.Docstring -> n -> a) -> ThriftParser p n a
 docstring p = lastDocstring >>= \s -> do
-    annot <- ThriftParser . lift $ Reader.ask >>= lift
+    annot <- getSrcAnnot
     p <*> pure s <*> pure annot
 
 
@@ -345,17 +358,18 @@ constant = do
 
 
 -- | A constant value literal.
-constantValue :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.ConstValue
+constantValue
+    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.ConstValue n)
 constantValue = choice [
     either T.ConstInt T.ConstFloat <$> integerOrDouble
   , T.ConstLiteral <$> literal
-  , T.ConstIdentifier <$> identifier
+  , withSrcAnnot (T.ConstIdentifier <$> identifier)
   , T.ConstList <$> constList
   , T.ConstMap <$> constMap
   ]
 
 
-constList :: (TokenParsing p, MonadPlus p) => ThriftParser p n [T.ConstValue]
+constList :: (TokenParsing p, MonadPlus p) => ThriftParser p n [T.ConstValue n]
 constList = symbolic '[' *> loop []
   where
     loop xs = choice [
@@ -368,7 +382,7 @@ constList = symbolic '[' *> loop []
 
 constMap
     :: (TokenParsing p, MonadPlus p)
-    => ThriftParser p n [(T.ConstValue, T.ConstValue)]
+    => ThriftParser p n [(T.ConstValue n, T.ConstValue n)]
 constMap = symbolic '{' *> loop []
   where
     loop xs = choice [
@@ -381,22 +395,22 @@ constMap = symbolic '{' *> loop []
 
 constantValuePair
     :: (TokenParsing p, MonadPlus p)
-    => ThriftParser p n (T.ConstValue, T.ConstValue)
+    => ThriftParser p n (T.ConstValue n, T.ConstValue n)
 constantValuePair =
     (,) <$> (constantValue <* colon)
         <*> (constantValue <* optionalSep)
 
 
 -- | A reference to a built-in or defined field.
-fieldType :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.FieldType
+fieldType :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.FieldType n)
 fieldType = choice [
     baseType
   , containerType
-  , T.DefinedType <$> identifier
+  , withSrcAnnot (T.DefinedType <$> identifier)
   ]
 
 
-baseType :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.FieldType
+baseType :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.FieldType n)
 baseType =
     choice [reserved s *> (v <$> typeAnnotations) | (s, v) <- bases]
   where
@@ -406,6 +420,7 @@ baseType =
       , ("slist", T.SListType)
       , ("bool", T.BoolType)
       , ("byte", T.ByteType)
+      , ("i8", T.ByteType)
       , ("i16", T.I16Type)
       , ("i32", T.I32Type)
       , ("i64", T.I64Type)
@@ -413,7 +428,8 @@ baseType =
       ]
 
 
-containerType :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.FieldType
+containerType
+    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.FieldType n)
 containerType =
     choice [mapType, setType, listType] <*> typeAnnotations
   where
@@ -473,7 +489,7 @@ typeAnnotation
 typeAnnotation =
     T.TypeAnnotation
         <$> identifier
-        <*> (equals *> literal <* optionalSep)
+        <*> (optional (equals *> literal) <* optionalSep)
 
 
 optionalSep :: (TokenParsing p, MonadPlus p) => ThriftParser p n ()
@@ -482,4 +498,3 @@ optionalSep = void $ optional (comma <|> semi)
 
 equals :: (TokenParsing p, MonadPlus p) => ThriftParser p n ()
 equals = void $ symbolic '='
-

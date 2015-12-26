@@ -1,3 +1,11 @@
+0.5.0.0
+=======
+
+-   Added source annotations to headers, type references (`DefinedType`) and
+    constant value references (`ConstIdentifer`).
+-   Added `i8` as an alias for `byte`.
+-   Type annotations are now allowed to have no associated value.
+
 0.4.0.0
 =======
 
