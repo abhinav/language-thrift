@@ -73,26 +73,23 @@ program c T.Program{..} =
 
 -- | Print the headers for a program.
 header :: T.Header ann -> Doc
-header T.Include{..} =
+header (T.HeaderInclude T.Include{..}) =
     text "include" <+> literal includePath
-header T.Namespace{..} = hsep
+header (T.HeaderNamespace T.Namespace{..}) = hsep
     [text "namespace", text namespaceLanguage, text namespaceName]
 
 
 -- | Print a constant, type, or service definition.
 definition :: Config -> T.Definition ann -> Doc
-definition c T.ConstDefinition{..} = constDocstring $$ hsep
+definition c (T.ConstDefinition T.Const{..}) = constDocstring $$ hsep
     [ text "const"
     , fieldType c constType
     , text constName
     , text "="
     , constantValue c constValue
     ]
-
-definition c T.TypeDefinition{typeDefinition = def, ..} =
-    typeDefinition c def <> typeAnnots c typeAnnotations
-
-definition c@Config{indentWidth} T.ServiceDefinition{..} =
+definition c (T.TypeDefinition def) = typeDefinition c def
+definition c@Config{indentWidth} (T.ServiceDefinition T.Service{..}) =
   serviceDocstring $$
     text "service" <+> text serviceName <> extends <+>
     block indentWidth (line <> line) (map (function c) serviceFunctions) <>
@@ -128,23 +125,29 @@ function c@Config{indentWidth} T.Function{..} = functionDocstring $$
 
 typeDefinition :: Config -> T.Type ann -> Doc
 typeDefinition c@Config{indentWidth} t = case t of
-  T.Typedef{..} -> typedefDocstring $$
+  T.TypedefType T.Typedef{..} -> typedefDocstring $$
     text "typedef" <+> fieldType c typedefType <+> text typedefName
-  T.Enum{..} -> enumDocstring $$
+    <> typeAnnots c typedefAnnotations
+  T.EnumType T.Enum{..} -> enumDocstring $$
     text "enum" <+> text enumName <+>
       block indentWidth (comma <> line) (map (enumValue c) enumValues)
-  T.Struct{..} -> structDocstring $$
+    <> typeAnnots c enumAnnotations
+  T.StructType T.Struct{..} -> structDocstring $$
     text "struct" <+> text structName <+>
       block indentWidth line (map (\f -> field c f <> semi) structFields)
-  T.Union{..} -> unionDocstring $$
+    <> typeAnnots c structAnnotations
+  T.UnionType T.Union{..} -> unionDocstring $$
     text "union" <+> text unionName <+>
       block indentWidth line (map (\f -> field c f <> semi) unionFields)
-  T.Exception{..} -> exceptionDocstring $$
+    <> typeAnnots c unionAnnotations
+  T.ExceptionType T.Exception{..} -> exceptionDocstring $$
     text "exception" <+> text exceptionName <+>
       block indentWidth line (map (\f -> field c f <> semi) exceptionFields)
-  T.Senum{..} -> senumDocstring $$
+    <> typeAnnots c exceptionAnnotations
+  T.SenumType T.Senum{..} -> senumDocstring $$
     text "senum" <+> text senumName <+>
       encloseSep indentWidth lbrace rbrace comma (map literal senumValues)
+    <> typeAnnots c senumAnnotations
 
 
 field :: Config -> T.Field ann -> Doc

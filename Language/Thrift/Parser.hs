@@ -199,9 +199,17 @@ identifier = ident idStyle
 
 -- | Headers defined for the IDL.
 header :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Header n)
-header = choice [
-    reserved "include" >> withSrcAnnot (T.Include <$> literal)
-  , reserved "namespace" >>
+header = choice
+  [ T.HeaderInclude   <$> include
+  , T.HeaderNamespace <$> namespace
+  ]
+
+include :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Include n)
+include = reserved "include" >> withSrcAnnot (T.Include <$> literal)
+
+namespace :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Namespace n)
+namespace = choice
+  [ reserved "namespace" >>
     withSrcAnnot (T.Namespace <$> (text "*" <|> identifier) <*> identifier)
   , reserved "cpp_namespace" >> withSrcAnnot (T.Namespace "cpp" <$> identifier)
   , reserved "php_namespace" >> withSrcAnnot (T.Namespace "php" <$> identifier)
@@ -243,23 +251,31 @@ docstring p = lastDocstring >>= \s -> do
 
 -- | A constant, type, or service definition.
 definition :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
-definition = choice [constant, typeDefinition, service]
+definition = choice
+    [ T.ConstDefinition   <$> constant
+    , T.TypeDefinition    <$> typeDefinition
+    , T.ServiceDefinition <$> service
+    ]
 
 
 -- | A type definition.
-typeDefinition :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
-typeDefinition =
-  T.TypeDefinition
-    <$> choice [typedef, enum, senum, struct, union, exception]
-    <*> typeAnnotations
+typeDefinition :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
+typeDefinition = choice
+    [ T.TypedefType   <$> typedef
+    , T.EnumType      <$> enum
+    , T.SenumType     <$> senum
+    , T.StructType    <$> struct
+    , T.UnionType     <$> union
+    , T.ExceptionType <$> exception
+    ]
 
 
 -- | A typedef is just an alias for another type.
 --
 -- > typedef common.Foo Bar
-typedef :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
+typedef :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Typedef n)
 typedef = reserved "typedef" >>
-    docstring (T.Typedef <$> fieldType <*> identifier)
+    docstring (T.Typedef <$> fieldType <*> identifier <*> typeAnnotations)
 
 
 -- | Enums are sets of named integer values.
@@ -267,9 +283,12 @@ typedef = reserved "typedef" >>
 -- > enum Role {
 -- >     User = 1, Admin
 -- > }
-enum :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
+enum :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Enum n)
 enum = reserved "enum" >>
-    docstring (T.Enum <$> identifier <*> braces (many enumDef))
+    docstring (T.Enum
+        <$> identifier
+        <*> braces (many enumDef)
+        <*> typeAnnotations)
 
 
 -- | A @struct@.
@@ -278,9 +297,12 @@ enum = reserved "enum" >>
 -- >     1: string name
 -- >     2: Role role = Role.User;
 -- > }
-struct :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
+struct :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Struct n)
 struct = reserved "struct" >>
-    docstring (T.Struct <$> identifier <*> braces (many field))
+    docstring (T.Struct
+        <$> identifier
+        <*> braces (many field)
+        <*> typeAnnotations)
 
 
 -- | A @union@ of types.
@@ -289,9 +311,12 @@ struct = reserved "struct" >>
 -- >     1: string stringValue;
 -- >     2: i32 intValue;
 -- > }
-union :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
+union :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Union n)
 union = reserved "union" >>
-    docstring (T.Union <$> identifier <*> braces (many field))
+    docstring (T.Union
+        <$> identifier
+        <*> braces (many field)
+        <*> typeAnnotations)
 
 
 -- | An @exception@ that can be raised by service methods.
@@ -300,9 +325,12 @@ union = reserved "union" >>
 -- >     1: optional string message
 -- >     2: required string username
 -- > }
-exception :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
+exception :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Exception n)
 exception = reserved "exception" >>
-     docstring (T.Exception <$> identifier <*> braces (many field))
+     docstring (T.Exception
+        <$> identifier
+        <*> braces (many field)
+        <*> typeAnnotations)
 
 
 -- | Whether a field is @required@ or @optional@.
@@ -338,19 +366,22 @@ enumDef = docstring $
 
 -- | An string-only enum. These are a deprecated feature of Thrift and
 -- shouldn't be used.
-senum :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
+senum :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Senum n)
 senum = reserved "senum" >> docstring
-    (T.Senum <$> identifier <*> braces (many (literal <* optionalSep)))
+    (T.Senum
+        <$> identifier
+        <*> braces (many (literal <* optionalSep))
+        <*> typeAnnotations)
 
 
 -- | A 'const' definition.
 --
 -- > const i32 code = 1;
-constant :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
+constant :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Const n)
 constant = do
   reserved "const"
   docstring $
-    T.ConstDefinition
+    T.Const
         <$> fieldType
         <*> (identifier <* equals)
         <*> constantValue
@@ -444,11 +475,11 @@ containerType =
 -- > service MyService {
 -- >     // ...
 -- > }
-service :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
+service :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Service n)
 service = do
   reserved "service"
   docstring $
-    T.ServiceDefinition
+    T.Service
         <$> identifier
         <*> optional (reserved "extends" *> identifier)
         <*> braces (many function)

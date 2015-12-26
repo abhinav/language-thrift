@@ -12,9 +12,23 @@
 --
 module Language.Thrift.Types
     ( Program(..)
+
     , Header(..)
+    , Include(..)
+    , Namespace(..)
+
     , Definition(..)
+    , Const(..)
+    , Service(..)
     , Type(..)
+
+    , Typedef(..)
+    , Enum(..)
+    , Struct(..)
+    , Union(..)
+    , Exception(..)
+    , Senum(..)
+
     , FieldRequiredness(..)
     , Field(..)
     , EnumDef(..)
@@ -28,6 +42,7 @@ module Language.Thrift.Types
 import Data.Data    (Data, Typeable)
 import Data.Text    (Text)
 import GHC.Generics (Generic)
+import Prelude      hiding (Enum)
 
 -- | A program represents a single Thrift document.
 data Program srcAnnot = Program
@@ -40,154 +55,205 @@ data Program srcAnnot = Program
 
 -- | Headers for a program.
 data Header srcAnnot
-    = -- | The IDL includes another Thrift file.
-      --
-      -- > include "common.thrift"
-      -- >
-      -- > typedef common.Foo Bar
-      --
-      Include
-        { includePath :: Text
-        -- ^ Path to the included file.
-        , includeSrcAnnot :: srcAnnot
-        }
-    | -- | Namespace directives allows control of the namespace or package
-      -- name used by the generated code for certain languages.
-      --
-      -- > namespace py my_service.generated
-      Namespace
-        { namespaceLanguage :: Text
-        -- ^ The language for which the namespace is being specified. This may
-        -- be @*@ to refer to all languages.
-        , namespaceName     :: Text
-        -- ^ Namespace or package path to use in the generated code for that
-        -- language.
-        , namespaceSrcAnnot :: srcAnnot
-        }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+    = -- | Request to include another Thrift file.
+      HeaderInclude (Include srcAnnot)
+    | -- | A @namespace@ specifier.
+      HeaderNamespace (Namespace srcAnnot)
+    deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | Namespace directives allows control of the namespace or package
+-- name used by the generated code for certain languages.
+--
+-- > namespace py my_service.generated
+data Namespace srcAnnot = Namespace
+    { namespaceLanguage :: Text
+    -- ^ The language for which the namespace is being specified. This may
+    -- be @*@ to refer to all languages.
+    , namespaceName     :: Text
+    -- ^ Namespace or package path to use in the generated code for that
+    -- language.
+    , namespaceSrcAnnot :: srcAnnot
+    }
+    deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | The IDL includes another Thrift file.
+--
+-- > include "common.thrift"
+-- >
+-- > typedef common.Foo Bar
+--
+data Include srcAnnot = Include
+    { includePath     :: Text
+    -- ^ Path to the included file.
+    , includeSrcAnnot :: srcAnnot
+    }
+    deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 -- | A definition either consists of new constants, new types, or new
 -- services.
 data Definition srcAnnot
     = -- | A declared constant.
-      --
-      -- > const i32 code = 1;
-      ConstDefinition
-        { constType      :: FieldType srcAnnot
-        -- ^ Type of the constant.
-        , constName      :: Text
-        -- ^ Name of the constant.
-        , constValue     :: ConstValue srcAnnot
-        -- ^ Value of the constant.
-        , constDocstring :: Docstring
-        -- ^ Documentation.
-        , constSrcAnnot  :: srcAnnot
-        }
-    | -- | A declared type.
-      TypeDefinition
-        { typeDefinition  :: Type srcAnnot
-        -- ^ Details of the type definition.
-        , typeAnnotations :: [TypeAnnotation]
-        -- ^ Annotations added to the type.
-        }
+      ConstDefinition (Const srcAnnot)
+    | -- | A custom type.
+      TypeDefinition (Type srcAnnot)
     | -- | A service definition.
-      --
-      -- > service MyService {
-      -- >     // ...
-      -- > }
-      ServiceDefinition
-        { serviceName        :: Text
-        -- ^ Name of the service.
-        , serviceExtends     :: Maybe Text
-        -- ^ Name of the service this service extends.
-        , serviceFunctions   :: [Function srcAnnot]
-        -- ^ All the functions defined for the service.
-        , serviceAnnotations :: [TypeAnnotation]
-        -- ^ Annotations added to the service.
-        , serviceDocstring   :: Docstring
-        -- ^ Documentation.
-        , serviceSrcAnnot    :: srcAnnot
-        }
+      ServiceDefinition (Service srcAnnot)
+
+  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | A service definition.
+--
+-- > service MyService {
+-- >     // ...
+-- > }
+data Service srcAnnot = Service
+    { serviceName        :: Text
+    -- ^ Name of the service.
+    , serviceExtends     :: Maybe Text
+    -- ^ Name of the service this service extends.
+    , serviceFunctions   :: [Function srcAnnot]
+    -- ^ All the functions defined for the service.
+    , serviceAnnotations :: [TypeAnnotation]
+    -- ^ Annotations added to the service.
+    , serviceDocstring   :: Docstring
+    -- ^ Documentation.
+    , serviceSrcAnnot    :: srcAnnot
+    }
+  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | A declared constant.
+--
+-- > const i32 code = 1;
+data Const srcAnnot = Const
+    { constType      :: FieldType srcAnnot
+    -- ^ Type of the constant.
+    , constName      :: Text
+    -- ^ Name of the constant.
+    , constValue     :: ConstValue srcAnnot
+    -- ^ Value of the constant.
+    , constDocstring :: Docstring
+    -- ^ Documentation.
+    , constSrcAnnot  :: srcAnnot
+    }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 -- | Defines the various types that can be declared in Thrift.
 data Type srcAnnot
-    = -- | A typedef is just an alias for another type.
-      --
-      -- > typedef common.Foo Bar
-      Typedef
-        { typedefType      :: FieldType srcAnnot
-        -- ^ The aliased type.
-        , typedefName      :: Text
-        -- ^ Name of the new type.
-        , typedefDocstring :: Docstring
-        -- ^ Documentation.
-        , typedefSrcAnnot  :: srcAnnot
-        }
-    | -- | Enums are sets of named integer values.
-      --
-      -- > enum Role {
-      -- >     User = 1, Admin = 2
-      -- > }
-      Enum
-        { enumName      :: Text
-        -- ^ Name of the enum type.
-        , enumValues    :: [EnumDef srcAnnot]
-        -- ^ Values defined in the enum.
-        , enumDocstring :: Docstring
-        -- ^ Documentation.
-        , enumSrcAnnot  :: srcAnnot
-        }
-    | -- | A struct definition
-      --
-      -- > struct User {
-      -- >     1: Role role = Role.User;
-      -- > }
-      Struct
-        { structName      :: Text
-        -- ^ Name of the struct.
-        , structFields    :: [Field srcAnnot]
-        -- ^ Fields defined in the struct.
-        , structDocstring :: Docstring
-        -- ^ Documentation.
-        , structSrcAnnot  :: srcAnnot
-        }
-    | -- | A union of other types.
-      --
-      -- > union Value {
-      -- >     1: string stringValue;
-      -- >     2: i32 intValue;
-      -- > }
-      Union
-        { unionName      :: Text
-        -- ^ Name of the union.
-        , unionFields    :: [Field srcAnnot]
-        -- ^ Fields defined in the union.
-        , unionDocstring :: Docstring
-        -- ^ Documentation.
-        , unionSrcAnnot  :: srcAnnot
-        }
-    | -- | Exception types.
-      --
-      -- > exception UserDoesNotExist {
-      -- >     1: optional string message
-      -- >     2: required string username
-      -- > }
-      Exception
-        { exceptionName      :: Text
-        , exceptionFields    :: [Field srcAnnot]
-        , exceptionDocstring :: Docstring
-        , exceptionSrcAnnot  :: srcAnnot
-        }
-    | -- | An string-only enum. These are a deprecated feature of Thrift and
-      -- shouldn't be used.
-      Senum
-        { senumName      :: Text
-        , senumValues    :: [Text]
-        , senumDocstring :: Docstring
-        -- ^ Documentation.
-        , senumSrcAnnot  :: srcAnnot
-        }
+    = -- | @typedef@
+      TypedefType (Typedef srcAnnot)
+    | -- | @enum@
+      EnumType (Enum srcAnnot)
+    | -- | @struct@
+      StructType (Struct srcAnnot)
+    | -- | @union@
+      UnionType (Union srcAnnot)
+    | -- | @exception@
+      ExceptionType (Exception srcAnnot)
+    | -- | @senum@
+      SenumType (Senum srcAnnot)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | A typedef is just an alias for another type.
+--
+-- > typedef common.Foo Bar
+data Typedef srcAnnot = Typedef
+    { typedefType        :: FieldType srcAnnot
+    -- ^ The aliased type.
+    , typedefName        :: Text
+    -- ^ Name of the new type.
+    , typedefAnnotations :: [TypeAnnotation]
+    -- ^ Annotations added to the typedef.
+    , typedefDocstring   :: Docstring
+    -- ^ Documentation.
+    , typedefSrcAnnot    :: srcAnnot
+    }
+  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | Enums are sets of named integer values.
+--
+-- > enum Role {
+-- >     User = 1, Admin = 2
+-- > }
+data Enum srcAnnot = Enum
+    { enumName        :: Text
+    -- ^ Name of the enum type.
+    , enumValues      :: [EnumDef srcAnnot]
+    -- ^ Values defined in the enum.
+    , enumAnnotations :: [TypeAnnotation]
+    -- ^ Annotations added to the enum.
+    , enumDocstring   :: Docstring
+    -- ^ Documentation.
+    , enumSrcAnnot    :: srcAnnot
+    }
+  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | A struct definition
+--
+-- > struct User {
+-- >     1: Role role = Role.User;
+-- > }
+data Struct srcAnnot = Struct
+    { structName        :: Text
+    -- ^ Name of the struct.
+    , structFields      :: [Field srcAnnot]
+    -- ^ Fields defined in the struct.
+    , structAnnotations :: [TypeAnnotation]
+    -- ^ Annotations added to the struct.
+    , structDocstring   :: Docstring
+    -- ^ Documentation.
+    , structSrcAnnot    :: srcAnnot
+    }
+  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | A union of other types.
+--
+-- > union Value {
+-- >     1: string stringValue;
+-- >     2: i32 intValue;
+-- > }
+data Union srcAnnot = Union
+    { unionName        :: Text
+    -- ^ Name of the union.
+    , unionFields      :: [Field srcAnnot]
+    -- ^ Fields defined in the union.
+    , unionAnnotations :: [TypeAnnotation]
+    -- ^ Annotations added to the union.
+    , unionDocstring   :: Docstring
+    -- ^ Documentation.
+    , unionSrcAnnot    :: srcAnnot
+    }
+  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | Exception types.
+--
+-- > exception UserDoesNotExist {
+-- >     1: optional string message
+-- >     2: required string username
+-- > }
+data Exception srcAnnot = Exception
+    { exceptionName        :: Text
+    -- ^ Name of the exception.
+    , exceptionFields      :: [Field srcAnnot]
+    -- ^ Fields defined in the exception.
+    , exceptionAnnotations :: [TypeAnnotation]
+    -- ^ Annotations added to the exception.
+    , exceptionDocstring   :: Docstring
+    -- ^ Documentation.
+    , exceptionSrcAnnot    :: srcAnnot
+    }
+  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | An string-only enum. These are a deprecated feature of Thrift and
+-- shouldn't be used.
+data Senum srcAnnot = Senum
+    { senumName        :: Text
+    , senumValues      :: [Text]
+    , senumAnnotations :: [TypeAnnotation]
+    -- ^ Annotations added to the senum.
+    , senumDocstring   :: Docstring
+    -- ^ Documentation.
+    , senumSrcAnnot    :: srcAnnot
+    }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 -- | Whether a field is required or optional.

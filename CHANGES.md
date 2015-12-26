@@ -1,6 +1,18 @@
 0.5.0.0
 =======
 
+Breaking changes:
+
+-   Moved `Header` records into `Include` and `Namespace` types.
+-   Moved `ConstDefinition` record into separate type, `Const`.
+-   Moved `ServiceDefinition` record into separate type, `Service`.
+-   Moved `Type` records into separate types: `Typedef`, `Enum`, `Struct`,
+    `Union`, `Exception`, `Senum`.
+-   Moved type annotations for defined types into the records for the types
+    themselves.
+
+Other changes:
+
 -   Added source annotations to headers, type references (`DefinedType`) and
     constant value references (`ConstIdentifer`).
 -   Added `i8` as an alias for `byte`.

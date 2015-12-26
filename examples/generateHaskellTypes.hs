@@ -104,16 +104,17 @@ renderType = go
     derivingClause =
         text "deriving" <+> tupled (map text ["Show", "Ord", "Eq"])
 
-    go (Typedef fieldType name docstring _) = docstring $$
+    go (TypedefType (Typedef fieldType name _ docstring _)) = docstring $$
         hsep [text "type", typeName name, equals, renderFieldType fieldType]
-    go (Enum name defs docstring _) = docstring $$
+    go (EnumType (Enum name defs _ docstring _)) = docstring $$
         text "data" <+> typeName name <>
         encloseSep (text " = ") empty (text " | ") (map renderDef defs)
         <$$> indent 4 derivingClause
       where
         renderDef (EnumDef e _ _ docstring _) = docstring $$ typeName e
-    go (Exception name fields docstring a) = go (Struct name fields docstring a)
-    go (Struct name fields docstring _) = docstring $$
+    go (ExceptionType (Exception name fields t docstring a)) =
+        go (StructType (Struct name fields t docstring a))
+    go (StructType (Struct name fields _ docstring _)) = docstring $$
         text "data" <+> typeName name </> equals <+> typeName name <$$>
         (if null fields
             then empty
@@ -125,7 +126,7 @@ renderType = go
             encloseSep (text "{ ") (line <> text "}") (text ", ") $
             map (renderStructField structName) fields
         structName = underscoresToCamelCase True name
-    go (Union name fields docstring _) =
+    go (UnionType (Union name fields _ docstring _)) =
         hang 4
           (docstring $$
               text "data" <+> typeName name <$>
@@ -176,13 +177,15 @@ generateOutput (Program _ definitions) = do
       ]
 
     genDef :: Show a => Definition a -> Doc
-    genDef (ConstDefinition fieldType name value docstring _) = docstring $$
-        sep [fieldName name, text "::", renderFieldType fieldType] <$>
-        sep [fieldName name, text "=", renderConstValue value]
-    genDef (TypeDefinition typeDef _) = renderType typeDef
-    genDef (ServiceDefinition sname Nothing funcs _ docstring _) = docstring $$
-        text "data" <+> typeName sname <+> text "a where" <$$>
-            indent 2 (vcat (map renderFunc funcs))
+    genDef (ConstDefinition (Const fieldType name value docstring _)) =
+        docstring $$
+            sep [fieldName name, text "::", renderFieldType fieldType] <$>
+            sep [fieldName name, text "=", renderConstValue value]
+    genDef (TypeDefinition typeDef) = renderType typeDef
+    genDef (ServiceDefinition (Service sname Nothing funcs _ docstring _)) =
+        docstring $$
+            text "data" <+> typeName sname <+> text "a where" <$$>
+                indent 2 (vcat (map renderFunc funcs))
       where
         renderFunc (Function False rtype name params _ _ docstring _) =
           docstring $$
