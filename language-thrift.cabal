@@ -38,12 +38,17 @@ test-suite spec
   main-is        : Main.hs
   ghc-options    : -Wall
   other-modules  : Language.Thrift.Arbitrary
+                 , Language.Thrift.ParserSpec
                  , Language.Thrift.TypesSpec
                  , Spec
+                 , TestUtils
   build-depends  : base
+
                  , hspec          >= 2.0
                  , hspec-discover >= 2.1
                  , QuickCheck     >= 2.5
+
+                 , parsers
                  , text
                  , trifecta
                  , wl-pprint

@@ -32,3 +32,4 @@ install:
 
 script:
     - stack --resolver $RESOLVER --no-terminal --skip-ghc-check test
+    - cd examples && ../scripts/travis_long stack --resolver $RESOLVER --no-terminal --skip-ghc-check build

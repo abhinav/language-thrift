@@ -224,9 +224,19 @@ header = choice
   , T.HeaderNamespace <$> namespace
   ]
 
+-- | The IDL includes another Thrift file.
+--
+-- > include "common.thrift"
+-- >
+-- > typedef common.Foo Bar
+--
 include :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Include n)
 include = reserved "include" >> withSrcAnnot (T.Include <$> literal)
 
+-- | Namespace directives allows control of the namespace or package
+-- name used by the generated code for certain languages.
+--
+-- > namespace py my_service.generated
 namespace :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Namespace n)
 namespace = choice
   [ reserved "namespace" >>
@@ -279,7 +289,7 @@ docstring p = lastDocstring >>= \s -> do
 -- | A constant, type, or service definition.
 definition
     :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
-definition = choice
+definition = whiteSpace >> choice
     [ T.ConstDefinition   <$> constant
     , T.TypeDefinition    <$> typeDefinition
     , T.ServiceDefinition <$> service

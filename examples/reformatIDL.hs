@@ -6,15 +6,15 @@ module Main (main) where
 --
 -- Docstrings in the IDL are preserved but COMMENTS WILL BE LOST.
 
-import System.IO (stderr)
-import           Text.Trifecta                (Result (..), parseString)
-import           Text.Trifecta.Delta          (Delta (Directed))
-import           Text.PrettyPrint.Leijen      (putDoc)
+import System.IO               (stderr)
+import Text.PrettyPrint.Leijen (putDoc)
+import Text.Trifecta           (Result (..), parseString)
+import Text.Trifecta.Delta     (Delta (Directed))
 
 import qualified Text.PrettyPrint.ANSI.Leijen as AnsiPP
 
-import Language.Thrift.Pretty (prettyPrint)
 import Language.Thrift.Parser.Trifecta (thriftIDL)
+import Language.Thrift.Pretty          (prettyPrint)
 
 main :: IO ()
 main = do

@@ -1,7 +1,8 @@
 0.5.0.0
 =======
 
-Breaking changes:
+The AST representation has been overhauled to be more consistent and
+accessible. As a result, this release contains a number of breaking changes:
 
 -   Moved `Header` records into `Include` and `Namespace` types.
 -   Moved `ConstDefinition` record into separate type, `Const`.
@@ -9,9 +10,10 @@ Breaking changes:
 -   Moved `Type` records into separate types: `Typedef`, `Enum`, `Struct`,
     `Union`, `Exception`, `Senum`.
 -   Renamed `FieldType` to `TypeReference`.
+-   Renamed parser and pretty printer for `TypeReference` to `typeReference`.
+-   Hide `function` parser and pretty printer.
 -   Moved type annotations for defined types into the records for the types
     themselves.
--   Hide `function` parser and pretty printer.
 
 Other changes:
 
@@ -23,6 +25,8 @@ Other changes:
 -   Added `i8` as an alias for `byte`.
 -   Type annotations are now allowed to have no associated value.
 -   Expose parsers and pretty printers for different headers and definitions.
+-   Fixed a bug which would cause parsing to fail if a definition ended with a
+    semicolon or a comma.
 
 0.4.0.0
 =======
