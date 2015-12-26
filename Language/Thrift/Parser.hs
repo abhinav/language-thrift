@@ -433,7 +433,7 @@ constantValuePair =
 
 
 -- | A reference to a built-in or defined field.
-fieldType :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.FieldType n)
+fieldType :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
 fieldType = choice [
     baseType
   , containerType
@@ -441,7 +441,7 @@ fieldType = choice [
   ]
 
 
-baseType :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.FieldType n)
+baseType :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
 baseType =
     choice [reserved s *> (v <$> typeAnnotations) | (s, v) <- bases]
   where
@@ -460,7 +460,7 @@ baseType =
 
 
 containerType
-    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.FieldType n)
+    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
 containerType =
     choice [mapType, setType, listType] <*> typeAnnotations
   where

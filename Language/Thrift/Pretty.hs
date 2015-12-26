@@ -177,7 +177,7 @@ enumValue c T.EnumDef{..} = enumDefDocstring $$
 
 
 -- | Pretty print a field type.
-fieldType :: Config -> T.FieldType ann -> Doc
+fieldType :: Config -> T.TypeReference ann -> Doc
 fieldType c ft = case ft of
   T.DefinedType t _ -> text t
 

@@ -33,7 +33,7 @@ module Language.Thrift.Types
     , Field(..)
     , EnumDef(..)
     , ConstValue(..)
-    , FieldType(..)
+    , TypeReference(..)
     , Function(..)
     , TypeAnnotation(..)
     , Docstring
@@ -125,7 +125,7 @@ data Service srcAnnot = Service
 --
 -- > const i32 code = 1;
 data Const srcAnnot = Const
-    { constType      :: FieldType srcAnnot
+    { constType      :: TypeReference srcAnnot
     -- ^ Type of the constant.
     , constName      :: Text
     -- ^ Name of the constant.
@@ -157,7 +157,7 @@ data Type srcAnnot
 --
 -- > typedef common.Foo Bar
 data Typedef srcAnnot = Typedef
-    { typedefType        :: FieldType srcAnnot
+    { typedefType        :: TypeReference srcAnnot
     -- ^ The aliased type.
     , typedefName        :: Text
     -- ^ Name of the new type.
@@ -275,7 +275,7 @@ data Field srcAnnot = Field
     -- Behavior may differ between languages if requiredness is not specified.
     -- Therefore it's recommended that requiredness for a field is always
     -- specified.
-    , fieldType         :: FieldType srcAnnot
+    , fieldType         :: TypeReference srcAnnot
     -- ^ Type of value the field holds.
     , fieldName         :: Text
     -- ^ Name of the field.
@@ -324,7 +324,7 @@ data ConstValue srcAnnot
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 -- | A reference to a type.
-data FieldType srcAnnot
+data TypeReference srcAnnot
     = DefinedType Text srcAnnot
     -- ^ A custom defined type referred to by name.
 
@@ -348,11 +348,14 @@ data FieldType srcAnnot
     -- ^ @double@ and annotations.
 
     -- Container types
-    | MapType (FieldType srcAnnot) (FieldType srcAnnot) [TypeAnnotation]
+    | MapType
+        (TypeReference srcAnnot)
+        (TypeReference srcAnnot)
+        [TypeAnnotation]
     -- ^ @map\<foo, bar\>@ and annotations.
-    | SetType (FieldType srcAnnot) [TypeAnnotation]
+    | SetType (TypeReference srcAnnot) [TypeAnnotation]
     -- ^ @set\<baz\>@ and annotations.
-    | ListType (FieldType srcAnnot) [TypeAnnotation]
+    | ListType (TypeReference srcAnnot) [TypeAnnotation]
     -- ^ @list\<qux\>@ and annotations.
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
@@ -361,7 +364,7 @@ data Function srcAnnot = Function
     { functionOneWay      :: Bool
     -- ^ Whether the function is @oneway@. If it's one way, it cannot receive
     -- repsonses.
-    , functionReturnType  :: Maybe (FieldType srcAnnot)
+    , functionReturnType  :: Maybe (TypeReference srcAnnot)
     -- ^ Return type of the function, or @Nothing@ if it's @void@ or @oneway@.
     , functionName        :: Text
     -- ^ Name of the function.

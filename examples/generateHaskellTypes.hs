@@ -62,21 +62,21 @@ renderConstValue (ConstMap m) = text "Map.fromList" <+> list (map renderConstTup
       , renderConstValue b
       ]
 
-renderFieldType :: Show a => FieldType a -> Doc
-renderFieldType (DefinedType t _) = text (unpack t)
-renderFieldType (StringType _) = text "Text"
-renderFieldType (BinaryType _) = text "ByteString"
-renderFieldType (BoolType _) = text "Bool"
-renderFieldType (ByteType _) = text "Word8"
-renderFieldType (I16Type _) = text "Word16"
-renderFieldType (I32Type _) = text "Word32"
-renderFieldType (I64Type _) = text "Word64"
-renderFieldType (DoubleType _) = text "Double"
-renderFieldType (MapType k v _) =
-    parens $ hsep [text "Map", renderFieldType k, renderFieldType v]
-renderFieldType (SetType i _) = parens $ text "Set" <+> renderFieldType i
-renderFieldType (ListType i _) = brackets $ renderFieldType i
-renderFieldType t = error $ "Unsupported field type: " ++ show t
+renderTypeReference :: Show a => TypeReference a -> Doc
+renderTypeReference (DefinedType t _) = text (unpack t)
+renderTypeReference (StringType _) = text "Text"
+renderTypeReference (BinaryType _) = text "ByteString"
+renderTypeReference (BoolType _) = text "Bool"
+renderTypeReference (ByteType _) = text "Word8"
+renderTypeReference (I16Type _) = text "Word16"
+renderTypeReference (I32Type _) = text "Word32"
+renderTypeReference (I64Type _) = text "Word64"
+renderTypeReference (DoubleType _) = text "Double"
+renderTypeReference (MapType k v _) =
+    parens $ hsep [text "Map", renderTypeReference k, renderTypeReference v]
+renderTypeReference (SetType i _) = parens $ text "Set" <+> renderTypeReference i
+renderTypeReference (ListType i _) = brackets $ renderTypeReference i
+renderTypeReference t = error $ "Unsupported field type: " ++ show t
 
 renderStructField :: Show a => Text -> Field a -> Doc
 renderStructField structName (Field _ req ftype fname def _ docstring _) = hang 4 $
@@ -86,7 +86,7 @@ renderStructField structName (Field _ req ftype fname def _ docstring _) = hang 
         text "::"
       , (if isOptional
             then text "Maybe" <> space
-            else empty) <> renderFieldType ftype
+            else empty) <> renderTypeReference ftype
       ]
   where
     isOptional
@@ -105,7 +105,7 @@ renderType = go
         text "deriving" <+> tupled (map text ["Show", "Ord", "Eq"])
 
     go (TypedefType (Typedef fieldType name _ docstring _)) = docstring $$
-        hsep [text "type", typeName name, equals, renderFieldType fieldType]
+        hsep [text "type", typeName name, equals, renderTypeReference fieldType]
     go (EnumType (Enum name defs _ docstring _)) = docstring $$
         text "data" <+> typeName name <>
         encloseSep (text " = ") empty (text " | ") (map renderDef defs)
@@ -136,7 +136,7 @@ renderType = go
       where
         structName = underscoresToCamelCase False name
         renderField (Field _ _ ftype fname _ _ docstring _) =
-            docstring $$ fieldName </> renderFieldType ftype
+            docstring $$ fieldName </> renderTypeReference ftype
           where
             fieldName = text . unpack $ Text.concat [
                 structName
@@ -179,7 +179,7 @@ generateOutput (Program _ definitions) = do
     genDef :: Show a => Definition a -> Doc
     genDef (ConstDefinition (Const fieldType name value docstring _)) =
         docstring $$
-            sep [fieldName name, text "::", renderFieldType fieldType] <$>
+            sep [fieldName name, text "::", renderTypeReference fieldType] <$>
             sep [fieldName name, text "=", renderConstValue value]
     genDef (TypeDefinition typeDef) = renderType typeDef
     genDef (ServiceDefinition (Service sname Nothing funcs _ docstring _)) =
@@ -198,7 +198,7 @@ generateOutput (Program _ definitions) = do
           where
             returnType = case rtype of
                 Nothing -> text "()"
-                Just t  -> renderFieldType t
+                Just t  -> renderTypeReference t
 
         renderParams fname params = indent 2 $
             encloseSep (text "{ ") (line <> text "} -> ") (text ", ") $

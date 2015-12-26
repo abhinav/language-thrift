@@ -8,6 +8,7 @@ Breaking changes:
 -   Moved `ServiceDefinition` record into separate type, `Service`.
 -   Moved `Type` records into separate types: `Typedef`, `Enum`, `Struct`,
     `Union`, `Exception`, `Senum`.
+-   Renamed `FieldType` to `TypeReference`.
 -   Moved type annotations for defined types into the records for the types
     themselves.
 
