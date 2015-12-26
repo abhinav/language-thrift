@@ -200,7 +200,11 @@ reserved = reserveText idStyle
 
 -- | Top-level parser to parse complete Thrift documents.
 program :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Program n)
-program = whiteSpace >> T.Program <$> many header <*> many definition
+program = whiteSpace >>
+    T.Program
+        <$> many (header     <* optionalSep)
+        <*> many (definition <* optionalSep)
+        <*  eof
 
 
 -- | A string literal. @"hello"@

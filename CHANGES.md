@@ -15,6 +15,9 @@ Breaking changes:
 
 Other changes:
 
+-   Parsing will fail if the end of the document is not reached when the parser
+    stops. This fixes the bug where the parser would stop half way through a
+    file when it saw a recoverable error.
 -   Added source annotations to headers, type references (`DefinedType`) and
     constant value references (`ConstIdentifer`).
 -   Added `i8` as an alias for `byte`.
