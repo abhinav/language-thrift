@@ -22,6 +22,7 @@ library
                    , Language.Thrift.Parser.Trifecta
                    , Language.Thrift.Pretty
                    , Language.Thrift.Types
+  ghc-options      : -Wall
   build-depends    : base      >= 4.7  && < 4.9
                    , mtl
                    , text      >= 1.2
@@ -35,7 +36,9 @@ test-suite spec
   type           : exitcode-stdio-1.0
   hs-source-dirs : test
   main-is        : Main.hs
-  other-modules  : Language.Thrift.TypesSpec
+  ghc-options    : -Wall
+  other-modules  : Language.Thrift.Arbitrary
+                 , Language.Thrift.TypesSpec
                  , Spec
   build-depends  : base
                  , hspec          >= 2.0

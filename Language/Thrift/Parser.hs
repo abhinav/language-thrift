@@ -29,10 +29,24 @@ module Language.Thrift.Parser
     -- * Components
 
     , program
+
     , header
+    , include
+    , namespace
+
     , definition
-    , function
-    , fieldType
+    , constant
+    , typeDefinition
+    , service
+
+    , typedef
+    , enum
+    , struct
+    , union
+    , exception
+    , senum
+
+    , typeReference
     , constantValue
 
     -- * Parser
@@ -87,7 +101,8 @@ newtype ParserState = ParserState
 -- allows injecting a configurable action @(p n)@ which produces annotations
 -- that will be attached to entities in the Thrift file. See 'thriftIDLParser'
 -- for an example.
-newtype ThriftParser p n a = ThriftParser (StateT ParserState (ReaderT (p n) p) a)
+newtype ThriftParser p n a =
+        ThriftParser (StateT ParserState (ReaderT (p n) p) a)
     deriving
       ( Functor
       , Applicative
@@ -119,7 +134,8 @@ runThriftParser getAnnot (ThriftParser p) =
     Reader.runReaderT (State.evalStateT p (ParserState Nothing)) getAnnot
 
 
-instance (TokenParsing p, MonadPlus p) => TokenParsing (ThriftParser p n) where
+instance
+  (TokenParsing p, MonadPlus p) => TokenParsing (ThriftParser p n) where
     -- Docstring parsing works by cheating. We define docstrings as
     -- whitespace, but we record it when we move over it. If we run into
     -- another newline or other comments after seeing the docstring's "*/\n",
@@ -211,12 +227,18 @@ namespace :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Namespace n)
 namespace = choice
   [ reserved "namespace" >>
     withSrcAnnot (T.Namespace <$> (text "*" <|> identifier) <*> identifier)
-  , reserved "cpp_namespace" >> withSrcAnnot (T.Namespace "cpp" <$> identifier)
-  , reserved "php_namespace" >> withSrcAnnot (T.Namespace "php" <$> identifier)
-  , reserved "py_module" >> withSrcAnnot (T.Namespace "py" <$> identifier)
-  , reserved "perl_package" >> withSrcAnnot (T.Namespace "perl" <$> identifier)
-  , reserved "ruby_namespace" >> withSrcAnnot (T.Namespace "rb" <$> identifier)
-  , reserved "java_package" >> withSrcAnnot (T.Namespace "java" <$> identifier)
+  , reserved "cpp_namespace" >>
+    withSrcAnnot (T.Namespace "cpp" <$> identifier)
+  , reserved "php_namespace" >>
+    withSrcAnnot (T.Namespace "php" <$> identifier)
+  , reserved "py_module" >>
+    withSrcAnnot (T.Namespace "py" <$> identifier)
+  , reserved "perl_package" >>
+    withSrcAnnot (T.Namespace "perl" <$> identifier)
+  , reserved "ruby_namespace" >>
+    withSrcAnnot (T.Namespace "rb" <$> identifier)
+  , reserved "java_package" >>
+    withSrcAnnot (T.Namespace "java" <$> identifier)
   , reserved "cocoa_package" >>
     withSrcAnnot (T.Namespace "cocoa" <$> identifier)
   , reserved "csharp_namespace" >>
@@ -229,7 +251,8 @@ getSrcAnnot = ThriftParser . lift $ Reader.ask >>= lift
 
 -- | Convenience wrapper for parsers expecting a source annotation.
 --
--- The source annotation will be retrieved BEFORE the parser itself is executed.
+-- The source annotation will be retrieved BEFORE the parser itself is
+-- executed.
 withSrcAnnot
     :: (Functor p, Monad p)
     => ThriftParser p n (n -> a) -> ThriftParser p n a
@@ -250,7 +273,8 @@ docstring p = lastDocstring >>= \s -> do
 
 
 -- | A constant, type, or service definition.
-definition :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
+definition
+    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
 definition = choice
     [ T.ConstDefinition   <$> constant
     , T.TypeDefinition    <$> typeDefinition
@@ -275,7 +299,7 @@ typeDefinition = choice
 -- > typedef common.Foo Bar
 typedef :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Typedef n)
 typedef = reserved "typedef" >>
-    docstring (T.Typedef <$> fieldType <*> identifier <*> typeAnnotations)
+    docstring (T.Typedef <$> typeReference <*> identifier <*> typeAnnotations)
 
 
 -- | Enums are sets of named integer values.
@@ -347,7 +371,7 @@ field = docstring $
   T.Field
     <$> optional (integer <* symbolic ':')
     <*> optional fieldRequiredness
-    <*> fieldType
+    <*> typeReference
     <*> identifier
     <*> optional (equals *> constantValue)
     <*> typeAnnotations
@@ -382,7 +406,7 @@ constant = do
   reserved "const"
   docstring $
     T.Const
-        <$> fieldType
+        <$> typeReference
         <*> (identifier <* equals)
         <*> constantValue
         <*  optionalSep
@@ -400,7 +424,8 @@ constantValue = choice [
   ]
 
 
-constList :: (TokenParsing p, MonadPlus p) => ThriftParser p n [T.ConstValue n]
+constList
+    :: (TokenParsing p, MonadPlus p) => ThriftParser p n [T.ConstValue n]
 constList = symbolic '[' *> loop []
   where
     loop xs = choice [
@@ -433,15 +458,17 @@ constantValuePair =
 
 
 -- | A reference to a built-in or defined field.
-fieldType :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
-fieldType = choice [
+typeReference
+    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
+typeReference = choice [
     baseType
   , containerType
   , withSrcAnnot (T.DefinedType <$> identifier)
   ]
 
 
-baseType :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
+baseType
+    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
 baseType =
     choice [reserved s *> (v <$> typeAnnotations) | (s, v) <- bases]
   where
@@ -465,9 +492,9 @@ containerType =
     choice [mapType, setType, listType] <*> typeAnnotations
   where
     mapType = reserved "map" >>
-        angles (T.MapType <$> (fieldType <* comma) <*> fieldType)
-    setType = reserved "set" >> angles (T.SetType <$> fieldType)
-    listType = reserved "list" >> angles (T.ListType <$> fieldType)
+        angles (T.MapType <$> (typeReference <* comma) <*> typeReference)
+    setType = reserved "set" >> angles (T.SetType <$> typeReference)
+    listType = reserved "list" >> angles (T.ListType <$> typeReference)
 
 
 -- | A service.
@@ -494,7 +521,7 @@ function :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Function n)
 function = docstring $
     T.Function
         <$> ((reserved "oneway" *> pure True) <|> pure False)
-        <*> ((reserved "void" *> pure Nothing) <|> Just <$> fieldType)
+        <*> ((reserved "void" *> pure Nothing) <|> Just <$> typeReference)
         <*> identifier
         <*> parens (many field)
         <*> optional (reserved "throws" *> parens (many field))

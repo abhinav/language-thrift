@@ -11,6 +11,7 @@ Breaking changes:
 -   Renamed `FieldType` to `TypeReference`.
 -   Moved type annotations for defined types into the records for the types
     themselves.
+-   Hide `function` parser and pretty printer.
 
 Other changes:
 
@@ -18,6 +19,7 @@ Other changes:
     constant value references (`ConstIdentifer`).
 -   Added `i8` as an alias for `byte`.
 -   Type annotations are now allowed to have no associated value.
+-   Expose parsers and pretty printers for different headers and definitions.
 
 0.4.0.0
 =======

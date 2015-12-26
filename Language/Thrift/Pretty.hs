@@ -22,10 +22,24 @@ module Language.Thrift.Pretty
     -- * Components
 
     , program
+
     , header
+    , include
+    , namespace
+
     , definition
-    , function
-    , fieldType
+    , constant
+    , typeDefinition
+    , service
+
+    , typedef
+    , enum
+    , struct
+    , union
+    , exception
+    , senum
+
+    , typeReference
     , constantValue
 
     -- * Configuration
@@ -73,23 +87,38 @@ program c T.Program{..} =
 
 -- | Print the headers for a program.
 header :: T.Header ann -> Doc
-header (T.HeaderInclude T.Include{..}) =
-    text "include" <+> literal includePath
-header (T.HeaderNamespace T.Namespace{..}) = hsep
+header (T.HeaderInclude inc) = include inc
+header (T.HeaderNamespace ns) = namespace ns
+
+
+include :: T.Include ann -> Doc
+include T.Include{..} = text "include" <+> literal includePath
+
+
+namespace :: T.Namespace ann -> Doc
+namespace T.Namespace{..} = hsep
     [text "namespace", text namespaceLanguage, text namespaceName]
 
 
 -- | Print a constant, type, or service definition.
 definition :: Config -> T.Definition ann -> Doc
-definition c (T.ConstDefinition T.Const{..}) = constDocstring $$ hsep
+definition c (T.ConstDefinition cd) = constant c cd
+definition c (T.TypeDefinition def) = typeDefinition c def
+definition c (T.ServiceDefinition s) = service c s
+
+
+constant :: Config -> T.Const ann -> Doc
+constant c T.Const{..} = constDocstring $$ hsep
     [ text "const"
-    , fieldType c constType
+    , typeReference c constType
     , text constName
     , text "="
     , constantValue c constValue
     ]
-definition c (T.TypeDefinition def) = typeDefinition c def
-definition c@Config{indentWidth} (T.ServiceDefinition T.Service{..}) =
+
+
+service :: Config -> T.Service ann -> Doc
+service c@Config{indentWidth} T.Service{..} =
   serviceDocstring $$
     text "service" <+> text serviceName <> extends <+>
     block indentWidth (line <> line) (map (function c) serviceFunctions) <>
@@ -116,7 +145,7 @@ function c@Config{indentWidth} T.Function{..} = functionDocstring $$
         encloseSep indentWidth lparen rparen comma (map (field c) es)
     returnType = case functionReturnType of
       Nothing -> text "void"
-      Just rt -> fieldType c rt
+      Just rt -> typeReference c rt
     oneway =
       if functionOneWay
           then text "oneway" <> space
@@ -124,27 +153,45 @@ function c@Config{indentWidth} T.Function{..} = functionDocstring $$
 
 
 typeDefinition :: Config -> T.Type ann -> Doc
-typeDefinition c@Config{indentWidth} t = case t of
-  T.TypedefType T.Typedef{..} -> typedefDocstring $$
-    text "typedef" <+> fieldType c typedefType <+> text typedefName
+typeDefinition c td = case td of
+  T.TypedefType   t -> c `typedef`   t
+  T.EnumType      t -> c `enum`      t
+  T.StructType    t -> c `struct`    t
+  T.UnionType     t -> c `union`     t
+  T.ExceptionType t -> c `exception` t
+  T.SenumType     t -> c `senum`     t
+
+typedef :: Config -> T.Typedef ann -> Doc
+typedef c T.Typedef{..} = typedefDocstring $$
+    text "typedef" <+> typeReference c typedefType <+> text typedefName
     <> typeAnnots c typedefAnnotations
-  T.EnumType T.Enum{..} -> enumDocstring $$
+
+enum :: Config -> T.Enum ann -> Doc
+enum c@Config{indentWidth} T.Enum{..} = enumDocstring $$
     text "enum" <+> text enumName <+>
       block indentWidth (comma <> line) (map (enumValue c) enumValues)
     <> typeAnnots c enumAnnotations
-  T.StructType T.Struct{..} -> structDocstring $$
+
+struct :: Config -> T.Struct ann -> Doc
+struct c@Config{indentWidth} T.Struct{..} = structDocstring $$
     text "struct" <+> text structName <+>
       block indentWidth line (map (\f -> field c f <> semi) structFields)
     <> typeAnnots c structAnnotations
-  T.UnionType T.Union{..} -> unionDocstring $$
+
+union :: Config -> T.Union ann -> Doc
+union c@Config{indentWidth} T.Union{..} = unionDocstring $$
     text "union" <+> text unionName <+>
       block indentWidth line (map (\f -> field c f <> semi) unionFields)
     <> typeAnnots c unionAnnotations
-  T.ExceptionType T.Exception{..} -> exceptionDocstring $$
+
+exception :: Config -> T.Exception ann -> Doc
+exception c@Config{indentWidth} T.Exception{..} = exceptionDocstring $$
     text "exception" <+> text exceptionName <+>
       block indentWidth line (map (\f -> field c f <> semi) exceptionFields)
     <> typeAnnots c exceptionAnnotations
-  T.SenumType T.Senum{..} -> senumDocstring $$
+
+senum :: Config -> T.Senum ann -> Doc
+senum c@Config{indentWidth} T.Senum{..} = senumDocstring $$
     text "senum" <+> text senumName <+>
       encloseSep indentWidth lbrace rbrace comma (map literal senumValues)
     <> typeAnnots c senumAnnotations
@@ -152,7 +199,7 @@ typeDefinition c@Config{indentWidth} t = case t of
 
 field :: Config -> T.Field ann -> Doc
 field c T.Field{fieldType = typ, ..} = fieldDocstring $$
-    hcat [fid, req, fieldType c typ, space, text fieldName, def, annots]
+    hcat [fid, req, typeReference c typ, space, text fieldName, def, annots]
   where
     fid = case fieldIdentifier of
       Nothing -> empty
@@ -177,8 +224,8 @@ enumValue c T.EnumDef{..} = enumDefDocstring $$
 
 
 -- | Pretty print a field type.
-fieldType :: Config -> T.TypeReference ann -> Doc
-fieldType c ft = case ft of
+typeReference :: Config -> T.TypeReference ann -> Doc
+typeReference c ft = case ft of
   T.DefinedType t _ -> text t
 
   T.StringType anns -> text "string" <> typeAnnots c anns
@@ -192,12 +239,12 @@ fieldType c ft = case ft of
   T.DoubleType anns -> text "double" <> typeAnnots c anns
 
   T.MapType k v anns ->
-    text "map" <> angles (fieldType c k <> comma <+> fieldType c v)
+    text "map" <> angles (typeReference c k <> comma <+> typeReference c v)
                <> typeAnnots c anns
   T.SetType v anns ->
-    text "set" <> angles (fieldType c v) <> typeAnnots c anns
+    text "set" <> angles (typeReference c v) <> typeAnnots c anns
   T.ListType v anns ->
-    text "list" <> angles (fieldType c v) <> typeAnnots c anns
+    text "list" <> angles (typeReference c v) <> typeAnnots c anns
 
 
 -- | Pretty print a constant value.
@@ -207,14 +254,11 @@ constantValue c@Config{indentWidth} value = case value of
   T.ConstFloat f -> double f
   T.ConstLiteral l -> literal l
   T.ConstIdentifier i _ -> text i
-
   T.ConstList vs ->
-    encloseSep indentWidth lbracket rbracket comma $
-        map (constantValue c) vs
+    encloseSep indentWidth lbracket rbracket comma $ map (constantValue c) vs
   T.ConstMap vs ->
     encloseSep indentWidth lbrace rbrace comma $
-      map (\(k, v) -> constantValue c k <> colon <+> constantValue c v)
-          vs
+      map (\(k, v) -> constantValue c k <> colon <+> constantValue c v) vs
 
 
 typeAnnots :: Config -> [T.TypeAnnotation] -> Doc
@@ -268,5 +312,6 @@ encloseSep _ left right _ [] = left <> right
 encloseSep _ left right _ [v] = left <> v <> right
 encloseSep indent left right s vs = group $
     nest indent (left <$$> go vs) <$$> right
-  where go [x] = x
+  where go [] = empty
+        go [x] = x
         go (x:xs) = (x <> s) <$> go xs
