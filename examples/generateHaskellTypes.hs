@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 module Main (main) where
@@ -9,7 +10,9 @@ module Main (main) where
 -- outputs for that service. Service inheritance is not supported and service
 -- method exceptions are ignored.
 
+#if __GLASGOW_HASKELL__ >= 709
 import Prelude hiding ((<$>))
+#endif
 
 import Data.Char   (toLower, toUpper)
 import Data.Maybe  (isNothing)

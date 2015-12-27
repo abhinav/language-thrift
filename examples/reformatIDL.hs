@@ -18,7 +18,8 @@ import Language.Thrift.Pretty          (prettyPrint)
 
 main :: IO ()
 main = do
-    result <- parseString thriftIDL (Directed "stdin" 0 0 0 0) <$> getContents
+    result <-
+        parseString thriftIDL (Directed "stdin" 0 0 0 0) `fmap` getContents
     case result of
         Success p -> putDoc (prettyPrint p) >> putStrLn ""
         Failure doc ->
