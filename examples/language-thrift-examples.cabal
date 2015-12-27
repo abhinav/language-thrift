@@ -7,7 +7,7 @@ cabal-version:       >=1.10
 
 executable reformatIDL
   main-is          : reformatIDL.hs
-  build-depends    : base            >= 4.8 && <4.9
+  build-depends    : base            >= 4.7 && <4.9
                    , language-thrift
 
                    , ansi-wl-pprint
@@ -17,7 +17,7 @@ executable reformatIDL
 
 executable generateHaskellTypes
   main-is          : generateHaskellTypes.hs
-  build-depends    : base            >= 4.8 && <4.9
+  build-depends    : base            >= 4.7 && <4.9
                    , language-thrift
 
                    , ansi-wl-pprint
