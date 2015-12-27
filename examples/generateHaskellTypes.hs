@@ -1,12 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 module Main (main) where
 
 -- This is a fairly simple code generator that uses language-thrift to parse
 -- IDL files and produces pretty printed Haskell code for all the types.
 --
 -- For services, it just generates a simple GADT that defines the inputs and
--- outputs for that service. Service inheritanec is not supported and
--- service method exceptions are ignored.
+-- outputs for that service. Service inheritance is not supported and service
+-- method exceptions are ignored.
 
 import Prelude hiding ((<$>))
 
@@ -23,7 +24,8 @@ import           Text.Trifecta                (Result (..), parseString)
 import           Text.Trifecta.Delta          (Delta (Directed))
 
 import Language.Thrift.Parser.Trifecta (thriftIDL)
-import Language.Thrift.Types
+
+import qualified Language.Thrift.Types as T
 
 die :: String -> IO a
 die s = putStrLn s >> exitFailure
@@ -33,7 +35,7 @@ die s = putStrLn s >> exitFailure
 (<&>) = flip fmap
 infixl 1 <&>
 
-($$) :: Docstring -> Doc -> Doc
+($$) :: T.Docstring -> Doc -> Doc
 ($$) Nothing y = y
 ($$) (Just t) y = case Text.lines t of
     [] -> y
@@ -49,108 +51,167 @@ list = encloseSep lbracket rbracket (text ", ")
 tupled :: [Doc] -> Doc
 tupled = encloseSep lparen rparen (text ", ")
 
-renderConstValue :: ConstValue a -> Doc
-renderConstValue (ConstInt i) = integer i
-renderConstValue (ConstFloat f) = double f
-renderConstValue (ConstLiteral l) = dquotes $ text (unpack l) -- TODO escaping
-renderConstValue (ConstIdentifier i _) = text (unpack i)
-renderConstValue (ConstList l) = list (map renderConstValue l)
-renderConstValue (ConstMap m) = text "Map.fromList" <+> list (map renderConstTuple m)
+renderConstValue :: T.ConstValue a -> Doc
+renderConstValue (T.ConstInt i) = integer i
+renderConstValue (T.ConstFloat f) = double f
+renderConstValue (T.ConstLiteral l) = dquotes $ text (unpack l) -- TODO escaping
+renderConstValue (T.ConstIdentifier i _) = text (unpack i)
+renderConstValue (T.ConstList l) = list (map renderConstValue l)
+renderConstValue (T.ConstMap m) = text "Map.fromList" <+> list (map renderConstTuple m)
   where
-    renderConstTuple (a, b) = tupled [
-        renderConstValue a
-      , renderConstValue b
-      ]
+    renderConstTuple (a, b) = tupled [renderConstValue a, renderConstValue b]
 
-renderTypeReference :: Show a => TypeReference a -> Doc
-renderTypeReference (DefinedType t _) = text (unpack t)
-renderTypeReference (StringType _) = text "Text"
-renderTypeReference (BinaryType _) = text "ByteString"
-renderTypeReference (BoolType _) = text "Bool"
-renderTypeReference (ByteType _) = text "Word8"
-renderTypeReference (I16Type _) = text "Word16"
-renderTypeReference (I32Type _) = text "Word32"
-renderTypeReference (I64Type _) = text "Word64"
-renderTypeReference (DoubleType _) = text "Double"
-renderTypeReference (MapType k v _) =
+renderTypeReference :: Show a => T.TypeReference a -> Doc
+renderTypeReference (T.DefinedType t _) = text (unpack t)
+renderTypeReference (T.StringType _) = text "Text"
+renderTypeReference (T.BinaryType _) = text "ByteString"
+renderTypeReference (T.BoolType _) = text "Bool"
+renderTypeReference (T.ByteType _) = text "Word8"
+renderTypeReference (T.I16Type _) = text "Word16"
+renderTypeReference (T.I32Type _) = text "Word32"
+renderTypeReference (T.I64Type _) = text "Word64"
+renderTypeReference (T.DoubleType _) = text "Double"
+renderTypeReference (T.MapType k v _) =
     parens $ hsep [text "Map", renderTypeReference k, renderTypeReference v]
-renderTypeReference (SetType i _) = parens $ text "Set" <+> renderTypeReference i
-renderTypeReference (ListType i _) = brackets $ renderTypeReference i
+renderTypeReference (T.SetType i _) = parens $ text "Set" <+> renderTypeReference i
+renderTypeReference (T.ListType i _) = brackets $ renderTypeReference i
 renderTypeReference t = error $ "Unsupported field type: " ++ show t
 
-renderStructField :: Show a => Text -> Field a -> Doc
-renderStructField structName (Field _ req ftype fname def _ docstring _) = hang 4 $
-    docstring $$
-    fieldName </>
-    hsep [
-        text "::"
+renderStructField :: Show a => Text -> T.Field a -> Doc
+renderStructField structName T.Field{..} = hang 4 $
+    fieldDocstring $$ name </> hsep
+      [ text "::"
       , (if isOptional
             then text "Maybe" <> space
-            else empty) <> renderTypeReference ftype
+            else empty)
+        <> renderTypeReference fieldValueType
       ]
   where
     isOptional
-      | isNothing req = False
-      | otherwise     = r == Optional && isNothing def
-      where (Just r)  = req
-    fieldName = text . unpack $ Text.concat [
+      | isNothing fieldRequiredness = False
+      | otherwise     = r == T.Optional && isNothing fieldDefaultValue
+      where (Just r)  = fieldRequiredness
+    name = text . unpack $ Text.concat [
         structName
-      , underscoresToCamelCase False fname
+      , underscoresToCamelCase False fieldName
       ]
 
-renderType :: Show a => Type a -> Doc
-renderType = go
-  where
-    derivingClause =
-        text "deriving" <+> tupled (map text ["Show", "Ord", "Eq"])
+renderTypedef :: Show a => T.Typedef a -> Doc
+renderTypedef T.Typedef{..} = typedefDocstring $$ hsep
+    [ text "type"
+    , typeName typedefName
+    , equals
+    , renderTypeReference typedefTargetType
+    ]
 
-    go (TypedefType (Typedef fieldType name _ docstring _)) = docstring $$
-        hsep [text "type", typeName name, equals, renderTypeReference fieldType]
-    go (EnumType (Enum name defs _ docstring _)) = docstring $$
-        text "data" <+> typeName name <>
-        encloseSep (text " = ") empty (text " | ") (map renderDef defs)
-        <$$> indent 4 derivingClause
+renderEnum :: T.Enum a -> Doc
+renderEnum T.Enum{..} = enumDocstring $$
+    text "data" <+> typeName enumName <>
+    encloseSep (text " = ") empty (text " | ") (map renderDef enumValues)
+    <$$> indent 4 derivingClause
+  where
+    renderDef T.EnumDef{..} = enumDefDocstring $$ typeName enumDefName
+
+renderStruct :: Show a => T.Struct a -> Doc
+renderStruct T.Struct{..} = structDocstring $$
+    text "data" <+> typeName structName </>
+    equals <+> typeName structName <$$>
+    (if null structFields
+        then empty
+        else indent 2 renderFields) </> derivingClause
+  -- TODO prefix should be configurable using annotations
+  where
+    renderFields = encloseSep (text "{ ") (line <> text "}") (text ", ") $
+        map (renderStructField $ underscoresToCamelCase True structName)
+             structFields
+
+renderException :: Show a => T.Exception a -> Doc
+renderException T.Exception{..} = renderStruct T.Struct
+    { T.structName = exceptionName
+    , T.structFields = exceptionFields
+    , T.structAnnotations = exceptionAnnotations
+    , T.structDocstring = exceptionDocstring
+    , T.structSrcAnnot = exceptionSrcAnnot
+    }
+
+renderUnion :: Show a => T.Union a -> Doc
+renderUnion T.Union{..} =
+    hang 4
+      (unionDocstring $$
+          text "data" <+> typeName unionName <$>
+          encloseSep (text "= ") empty (text " | ")
+                     (map renderField unionFields))
+    <$$> indent 4 derivingClause
+  where
+    renderField (T.Field _ _ ftype fname _ _ docstring _) =
+        docstring $$ fieldName </> renderTypeReference ftype
       where
-        renderDef (EnumDef e _ _ docstring _) = docstring $$ typeName e
-    go (ExceptionType (Exception name fields t docstring a)) =
-        go (StructType (Struct name fields t docstring a))
-    go (StructType (Struct name fields _ docstring _)) = docstring $$
-        text "data" <+> typeName name </> equals <+> typeName name <$$>
-        (if null fields
-            then empty
-            else indent 2 renderFields)
-        </> derivingClause
-      -- TODO prefix should be configurable using annotations
-      where
-        renderFields =
-            encloseSep (text "{ ") (line <> text "}") (text ", ") $
-            map (renderStructField structName) fields
-        structName = underscoresToCamelCase True name
-    go (UnionType (Union name fields _ docstring _)) =
-        hang 4
-          (docstring $$
-              text "data" <+> typeName name <$>
-              encloseSep (text "= ") empty (text " | ")
-                         (map renderField fields))
-        <$$> indent 4 derivingClause
-      where
-        structName = underscoresToCamelCase False name
-        renderField (Field _ _ ftype fname _ _ docstring _) =
-            docstring $$ fieldName </> renderTypeReference ftype
-          where
-            fieldName = text . unpack $ Text.concat [
-                structName
-              , underscoresToCamelCase False fname
-              ]
-    go t = error $ "Unsupported type: " ++ show t
+        fieldName = text . unpack $ Text.concat
+          [ underscoresToCamelCase False unionName
+          , underscoresToCamelCase False fname
+          ]
+
+derivingClause :: Doc
+derivingClause =
+    text "deriving" <+> tupled (map text ["Show", "Ord", "Eq"])
+
+renderType :: Show a => T.Type a -> Doc
+renderType (T.TypedefType   t) = renderTypedef t
+renderType (T.EnumType      t) = renderEnum t
+renderType (T.ExceptionType t) = renderException t
+renderType (T.StructType    t) = renderStruct t
+renderType (T.UnionType     t) = renderUnion t
+renderType                  t  = error $ "Unsupported type: " ++ show t
 
 typeName :: Text -> Doc
 typeName = mkName False
 
-generateOutput :: Show a => Program a -> IO ()
-generateOutput (Program _ definitions) = do
+renderConst :: Show a => T.Const a -> Doc
+renderConst T.Const{..} = constDocstring $$
+    sep [name, text "::", renderTypeReference constValueType] <$>
+    sep [name, text "=", renderConstValue constValue]
+  where
+    name = mkName True constName
+
+
+renderFunction :: Show a => Text -> T.Function a -> Doc
+renderFunction serviceName T.Function{functionOneWay = False, ..} =
+      functionDocstring $$
+          typeName functionName <+> text "::" <>
+          (if null functionParameters
+              then space
+              else linebreak <> renderParams) <>
+          typeName serviceName <+> returnType <> linebreak
+  where
+    returnType = case functionReturnType of
+        Nothing -> text "()"
+        Just t  -> renderTypeReference t
+
+    renderParams = indent 2 $
+        encloseSep (text "{ ") (line <> text "} -> ") (text ", ") $
+        map (renderStructField structName) functionParameters
+      where
+        structName = underscoresToCamelCase True functionName
+renderFunction _ f = error $ "Unsupported function: " ++ show f
+
+
+renderService :: Show a => T.Service a -> Doc
+renderService T.Service{serviceExtends = Nothing, ..} = serviceDocstring $$
+    text "data" <+> typeName serviceName <+> text "a where" <$$>
+    indent 2 (vcat (map (renderFunction serviceName) serviceFunctions))
+renderService s = error $ "Unsupported service: " ++ show s
+
+
+renderDefinition :: Show a => T.Definition a -> Doc
+renderDefinition (T.ConstDefinition   c) = renderConst   c
+renderDefinition (T.TypeDefinition    t) = renderType    t
+renderDefinition (T.ServiceDefinition s) = renderService s
+
+
+generateOutput :: Show a => T.Program a -> IO ()
+generateOutput (T.Program _ definitions) = do
     let doc = headers <$> empty <$>
-              vcat (map ((<$> empty) . genDef) definitions)
+              vcat (map ((<$> empty) . renderDefinition) definitions)
     displayIO stdout $ renderPretty 0.8 80 doc
   where
     import_ m items = sep [
@@ -175,38 +236,6 @@ generateOutput (Program _ definitions) = do
       , text ""
       , importQualified "Data.Map" "Map"
       ]
-
-    genDef :: Show a => Definition a -> Doc
-    genDef (ConstDefinition (Const fieldType name value docstring _)) =
-        docstring $$
-            sep [fieldName name, text "::", renderTypeReference fieldType] <$>
-            sep [fieldName name, text "=", renderConstValue value]
-    genDef (TypeDefinition typeDef) = renderType typeDef
-    genDef (ServiceDefinition (Service sname Nothing funcs _ docstring _)) =
-        docstring $$
-            text "data" <+> typeName sname <+> text "a where" <$$>
-                indent 2 (vcat (map renderFunc funcs))
-      where
-        renderFunc (Function False rtype name params _ _ docstring _) =
-          docstring $$
-            typeName name <+> text "::" <>
-            (if null params
-              then space
-              else linebreak <> renderParams name params) <>
-            typeName sname <+> returnType
-            <> linebreak
-          where
-            returnType = case rtype of
-                Nothing -> text "()"
-                Just t  -> renderTypeReference t
-
-        renderParams fname params = indent 2 $
-            encloseSep (text "{ ") (line <> text "} -> ") (text ", ") $
-                map (renderStructField structName) params
-          where
-            structName = underscoresToCamelCase True fname
-
-    fieldName = mkName True
 
 mkName :: Bool -> Text -> Doc
 mkName lowerFirst = text . unpack . underscoresToCamelCase lowerFirst

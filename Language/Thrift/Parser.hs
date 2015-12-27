@@ -57,17 +57,17 @@ module Language.Thrift.Parser
 
 import Control.Applicative
 import Control.Monad
-import Control.Monad.Reader    (ReaderT)
-import Control.Monad.State     (StateT)
-import Control.Monad.Trans     (lift)
+import Control.Monad.Trans.Reader    (ReaderT)
+import Control.Monad.Trans.State     (StateT)
+import Control.Monad.Trans.Class     (lift)
 import Data.Text               (Text)
 import Text.Parser.Char
 import Text.Parser.Combinators
 import Text.Parser.Token
 import Text.Parser.Token.Style (emptyIdents)
 
-import qualified Control.Monad.Reader as Reader
-import qualified Control.Monad.State  as State
+import qualified Control.Monad.Trans.Reader as Reader
+import qualified Control.Monad.Trans.State  as State
 import qualified Data.Text            as Text
 
 import qualified Language.Thrift.Types as T

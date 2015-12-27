@@ -11,12 +11,16 @@ accessible. As a result, this release contains a number of breaking changes:
     `Union`, `Exception`, `Senum`.
 -   Renamed `FieldType` to `TypeReference`.
 -   Renamed parser and pretty printer for `TypeReference` to `typeReference`.
+-   Renamed the following record fields: `constType` to `constValueType`,
+    `typedefType` to `typedefTargetType`, `fieldType` to `fieldValueType`, and
+    `fieldDefault` to `fieldDefaultValue`.
 -   Hide `function` parser and pretty printer.
 -   Moved type annotations for defined types into the records for the types
     themselves.
 
 Other changes:
 
+-   Added lenses and prisms for AST types where appropriate.
 -   Parsing will fail if the end of the document is not reached when the parser
     stops. This fixes the bug where the parser would stop half way through a
     file when it saw a recoverable error.
@@ -27,6 +31,7 @@ Other changes:
 -   Expose parsers and pretty printers for different headers and definitions.
 -   Fixed a bug which would cause parsing to fail if a definition ended with a
     semicolon or a comma.
+-   Drop dependency on mtl.
 
 0.4.0.0
 =======

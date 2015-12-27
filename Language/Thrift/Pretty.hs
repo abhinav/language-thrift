@@ -110,7 +110,7 @@ definition c (T.ServiceDefinition s) = service c s
 constant :: Config -> T.Const ann -> Doc
 constant c T.Const{..} = constDocstring $$ hsep
     [ text "const"
-    , typeReference c constType
+    , typeReference c constValueType
     , text constName
     , text "="
     , constantValue c constValue
@@ -163,7 +163,7 @@ typeDefinition c td = case td of
 
 typedef :: Config -> T.Typedef ann -> Doc
 typedef c T.Typedef{..} = typedefDocstring $$
-    text "typedef" <+> typeReference c typedefType <+> text typedefName
+    text "typedef" <+> typeReference c typedefTargetType <+> text typedefName
     <> typeAnnots c typedefAnnotations
 
 enum :: Config -> T.Enum ann -> Doc
@@ -198,7 +198,7 @@ senum c@Config{indentWidth} T.Senum{..} = senumDocstring $$
 
 
 field :: Config -> T.Field ann -> Doc
-field c T.Field{fieldType = typ, ..} = fieldDocstring $$
+field c T.Field{fieldValueType = typ, ..} = fieldDocstring $$
     hcat [fid, req, typeReference c typ, space, text fieldName, def, annots]
   where
     fid = case fieldIdentifier of
@@ -208,7 +208,7 @@ field c T.Field{fieldType = typ, ..} = fieldDocstring $$
       Nothing -> empty
       Just T.Optional -> text "optional "
       Just T.Required -> text "required "
-    def = case fieldDefault of
+    def = case fieldDefaultValue of
       Nothing -> empty
       Just v -> space <> equals <+> constantValue c v
     annots = typeAnnots c fieldAnnotations
