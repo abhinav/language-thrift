@@ -32,11 +32,13 @@ echo "Detected package: $pkg-$ver"
 dir=$(mktemp -d build-docs.XXXXXX)
 trap 'rm -r "$dir"' EXIT
 
-runhaskell Setup.hs configure \
+GHC_BIN="$(dirname "$(stack exec which ghc)")"
+
+PATH="$GHC_BIN:$PATH" runhaskell Setup.hs configure \
 	--package-db="$(stack path --local-pkg-db)" \
 	--package-db="$(stack path --snapshot-pkg-db)"
 
-runhaskell Setup.hs haddock \
+PATH="$GHC_BIN:$PATH" runhaskell Setup.hs haddock \
 	--hoogle --hyperlink-source \
 	--html-location="/package/\$pkg-\$version/docs" \
 	--contents-location="/package/\$pkg-\$version"
