@@ -1,3 +1,9 @@
+0.6.0.1
+=======
+
+-   Export `Pretty` instances from `Language.Thrift.Types` instead of requiring
+    a separate import of the corresponding `Pretty` module.
+
 0.6.0.0
 =======
 

@@ -41,6 +41,7 @@ library
     default-language: Haskell2010
     other-modules:
         Language.Thrift.Pretty.Types
+        Language.Thrift.Internal.Types
     ghc-options: -Wall
 
 test-suite spec

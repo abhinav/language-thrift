@@ -2,13 +2,14 @@
 -- ansi-wl-pprint in scope.
 
 #if __GLASGOW_HASKELL__ >= 709
-import Prelude hiding ((<$>))
+import Prelude hiding ((<$>), lines)
+#else
+import Prelude hiding (lines)
 #endif
 
-import Data.Text               (Text, unpack)
+import Data.Text (Text, unpack, lines, strip)
 
-import qualified Data.Text               as Text
-import qualified Language.Thrift.Types   as T
+import qualified Language.Thrift.Internal.Types as T
 
 import Language.Thrift.Pretty.Types
 
@@ -283,7 +284,7 @@ text = PP.text . unpack
 
 ($$) :: T.Docstring -> Doc -> Doc
 ($$) Nothing y = y
-($$) (Just t) y = case Text.lines (Text.strip t) of
+($$) (Just t) y = case lines (strip t) of
   [] -> y
   ls -> wrapComments ls <$> y
   where

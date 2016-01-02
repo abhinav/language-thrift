@@ -13,12 +13,11 @@ import Text.Trifecta.Delta     (Delta (Directed))
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
 import Language.Thrift.Parser.Trifecta (thriftIDL)
-import Language.Thrift.Pretty.ANSI     (prettyPrint)
 
 main :: IO ()
 main = do
     result <-
         parseString thriftIDL (Directed "stdin" 0 0 0 0) `fmap` getContents
     case result of
-        Success p   -> PP.putDoc (prettyPrint p) >> putStrLn ""
+        Success p   -> PP.putDoc (PP.pretty p) >> putStrLn ""
         Failure doc -> PP.displayIO stderr $ PP.renderPretty 0.8 80 doc
