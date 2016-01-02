@@ -9,7 +9,7 @@ sent through the pretty printer.
 The parser uses [`parsers`] to allow plugging in the underlying parser. A
 default [`trifecta`] based parser is provided.
 
-The pretty printer uses [wl-pprint].
+The pretty printer supports both, [wl-pprint] and [ansi-wl-pprint].
 
 Haddock-generated docs are available on [Hackage] and [here].
 
@@ -18,5 +18,6 @@ Haddock-generated docs are available on [Hackage] and [here].
   [`parsers`]: http://hackage.haskell.org/package/parsers
   [`trifecta`]: http://hackage.haskell.org/package/trifecta
   [wl-pprint]: http://hackage.haskell.org/package/wl-pprint
+  [ansi-wl-pprint]: http://hackage.haskell.org/package/ansi-wl-pprint
   [Hackage]: http://hackage.haskell.org/package/language-thrift
   [here]: http://abhinavg.net/language-thrift/
