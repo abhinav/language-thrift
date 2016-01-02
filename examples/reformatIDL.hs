@@ -7,20 +7,18 @@ module Main (main) where
 -- Docstrings in the IDL are preserved but COMMENTS WILL BE LOST.
 
 import System.IO               (stderr)
-import Text.PrettyPrint.Leijen (putDoc)
 import Text.Trifecta           (Result (..), parseString)
 import Text.Trifecta.Delta     (Delta (Directed))
 
-import qualified Text.PrettyPrint.ANSI.Leijen as AnsiPP
+import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
 import Language.Thrift.Parser.Trifecta (thriftIDL)
-import Language.Thrift.Pretty          (prettyPrint)
+import Language.Thrift.Pretty.ANSI     (prettyPrint)
 
 main :: IO ()
 main = do
     result <-
         parseString thriftIDL (Directed "stdin" 0 0 0 0) `fmap` getContents
     case result of
-        Success p -> putDoc (prettyPrint p) >> putStrLn ""
-        Failure doc ->
-            AnsiPP.displayIO stderr $ AnsiPP.renderPretty 0.8 80 doc
+        Success p   -> PP.putDoc (prettyPrint p) >> putStrLn ""
+        Failure doc -> PP.displayIO stderr $ PP.renderPretty 0.8 80 doc

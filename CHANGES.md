@@ -1,3 +1,10 @@
+0.6.0.0
+=======
+
+-   Added a pretty printer based on `ansi-wl-pprint`.
+-   Both pretty printing modules now export instances of `Pretty` for relevant
+    elements of the AST. These instances use `defaultConfig` for printing.
+
 0.5.0.0
 =======
 

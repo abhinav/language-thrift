@@ -4,21 +4,21 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |
--- Module      :  Language.Thrift.Pretty
+-- Module      :  Language.Thrift.Pretty.ANSI
 -- Copyright   :  (c) Abhinav Gupta 2015
 -- License     :  BSD3
 --
 -- Maintainer  :  Abhinav Gupta <mail@abhinavg.net>
 -- Stability   :  experimental
 --
--- This module provides a pretty printer for Thrift IDLs. The pretty printer
--- preserves docstrings specified for types.
+-- This module is the same as "Language.Thrift.Pretty" but the pretty printer
+-- used is the one provided by ansi-wl-pprint.
 --
 -- The specifics of the printer can be configured using 'Config' objects.
 --
--- The module also exports instances of the 'Pretty' typeclass for elements of
--- the AST.
-module Language.Thrift.Pretty
+-- As with "Language.Thrift.Pretty", this module exports instances of the
+-- 'Pretty' typeclass for @ansi-wl-pprint@.
+module Language.Thrift.Pretty.ANSI
     (
       prettyPrint
 
@@ -51,7 +51,7 @@ module Language.Thrift.Pretty
     , defaultConfig
     ) where
 
-import           Text.PrettyPrint.Leijen hiding (encloseSep, indent, text)
-import qualified Text.PrettyPrint.Leijen as PP
+import           Text.PrettyPrint.ANSI.Leijen hiding (encloseSep, indent, text)
+import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
-#include "Pretty/PrettyInc.hs"
+#include "PrettyInc.hs"
