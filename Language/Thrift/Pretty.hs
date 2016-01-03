@@ -51,7 +51,6 @@ module Language.Thrift.Pretty
     , defaultConfig
     ) where
 
-import           Text.PrettyPrint.Leijen hiding (encloseSep, indent, text)
-import qualified Text.PrettyPrint.Leijen as PP
-
+#define PrettyPrinter Text.PrettyPrint.Leijen
 #include "Pretty/PrettyInc.hs"
+#undef PrettyPrinter

@@ -1,5 +1,5 @@
 name: language-thrift
-version: 0.6.0.1
+version: 0.6.1.0
 cabal-version: >=1.10
 build-type: Simple
 license: BSD3
@@ -49,6 +49,7 @@ test-suite spec
     main-is: Main.hs
     build-depends:
         base -any,
+        ansi-wl-pprint -any,
         hspec >=2.0,
         hspec-discover >=2.1,
         QuickCheck >=2.5,

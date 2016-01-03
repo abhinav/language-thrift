@@ -2,16 +2,37 @@
 -- ansi-wl-pprint in scope.
 
 #if __GLASGOW_HASKELL__ >= 709
-import Prelude hiding ((<$>), lines)
+import Prelude hiding (lines, (<$>))
 #else
 import Prelude hiding (lines)
 #endif
 
-import Data.Text (Text, unpack, lines, strip)
+import Data.Text     (Text, lines, strip, unpack)
+import PrettyPrinter (Doc, align, double, dquotes, empty, nest, enclose, group, hcat, Pretty(..),
+                      hsep, integer, line, linebreak, space, vsep, (<$$>),
+                      (<$>), (<+>), (<>))
+
+import qualified PrettyPrinter as P
 
 import qualified Language.Thrift.Internal.Types as T
 
 import Language.Thrift.Pretty.Types
+
+
+bold, dullblue, magenta, yellow, cyan :: Doc -> Doc
+#ifdef PrettyPrinterSupportsHighlighting
+bold = P.bold
+dullblue = P.dullblue
+magenta = P.magenta
+yellow = P.yellow
+cyan = P.cyan
+#else
+bold = id
+dullblue = id
+magenta = id
+yellow = id
+cyan = id
+#endif
 
 
 -- | Top-level pretty printer for Thrift documents that uses the default
@@ -38,14 +59,14 @@ instance Pretty (T.Header a) where
     pretty = header
 
 include :: T.Include ann -> Doc
-include T.Include{..} = text "include" <+> literal includePath
+include T.Include{..} = reserved "include" <+> literal includePath
 
 instance Pretty (T.Include a) where
     pretty = include
 
 namespace :: T.Namespace ann -> Doc
 namespace T.Namespace{..} = hsep
-    [text "namespace", text namespaceLanguage, text namespaceName]
+    [reserved "namespace", text namespaceLanguage, text namespaceName]
 
 instance Pretty (T.Namespace a) where
     pretty = namespace
@@ -61,10 +82,10 @@ instance Pretty (T.Definition a) where
 
 constant :: Config -> T.Const ann -> Doc
 constant c T.Const{..} = constDocstring $$ hsep
-    [ text "const"
+    [ reserved "const"
     , typeReference c constValueType
-    , text constName
-    , text "="
+    , declare constName
+    , equals
     , constantValue c constValue
     ]
 
@@ -74,13 +95,13 @@ instance Pretty (T.Const a) where
 service :: Config -> T.Service ann -> Doc
 service c@Config{indentWidth} T.Service{..} =
   serviceDocstring $$
-    text "service" <+> text serviceName <> extends <+>
+    reserved "service" <+> declare serviceName <> extends <+>
     block indentWidth (line <> line) (map (function c) serviceFunctions) <>
     typeAnnots c serviceAnnotations
   where
     extends = case serviceExtends of
       Nothing -> empty
-      Just name -> space <> text "extends" <+> text name
+      Just name -> space <> reserved "extends" <+> text name
 
 instance Pretty (T.Service a) where
     pretty = service defaultConfig
@@ -97,14 +118,14 @@ function c@Config{indentWidth} T.Function{..} = functionDocstring $$
   where
     exceptions = case functionExceptions of
       Nothing -> empty
-      Just es -> space <> text "throws" <+>
+      Just es -> space <> reserved "throws" <+>
         encloseSep indentWidth lparen rparen comma (map (field c) es)
     returnType = case functionReturnType of
-      Nothing -> text "void"
+      Nothing -> reserved "void"
       Just rt -> typeReference c rt
     oneway =
       if functionOneWay
-          then text "oneway" <> space
+          then reserved "oneway" <> space
           else empty
 
 instance Pretty (T.Function a) where
@@ -124,15 +145,15 @@ instance Pretty (T.Type a) where
 
 typedef :: Config -> T.Typedef ann -> Doc
 typedef c T.Typedef{..} = typedefDocstring $$
-    text "typedef" <+> typeReference c typedefTargetType <+> text typedefName
-    <> typeAnnots c typedefAnnotations
+    reserved "typedef" <+> typeReference c typedefTargetType <+>
+    declare typedefName <> typeAnnots c typedefAnnotations
 
 instance Pretty (T.Typedef a) where
     pretty = typedef defaultConfig
 
 enum :: Config -> T.Enum ann -> Doc
 enum c@Config{indentWidth} T.Enum{..} = enumDocstring $$
-    text "enum" <+> text enumName <+>
+    reserved "enum" <+> declare enumName <+>
       block indentWidth (comma <> line) (map (enumValue c) enumValues)
     <> typeAnnots c enumAnnotations
 
@@ -141,7 +162,7 @@ instance Pretty (T.Enum a) where
 
 struct :: Config -> T.Struct ann -> Doc
 struct c@Config{indentWidth} T.Struct{..} = structDocstring $$
-    text "struct" <+> text structName <+>
+    reserved "struct" <+> declare structName <+>
       block indentWidth line (map (\f -> field c f <> semi) structFields)
     <> typeAnnots c structAnnotations
 
@@ -150,7 +171,7 @@ instance Pretty (T.Struct a) where
 
 union :: Config -> T.Union ann -> Doc
 union c@Config{indentWidth} T.Union{..} = unionDocstring $$
-    text "union" <+> text unionName <+>
+    reserved "union" <+> declare unionName <+>
       block indentWidth line (map (\f -> field c f <> semi) unionFields)
     <> typeAnnots c unionAnnotations
 
@@ -159,7 +180,7 @@ instance Pretty (T.Union a) where
 
 exception :: Config -> T.Exception ann -> Doc
 exception c@Config{indentWidth} T.Exception{..} = exceptionDocstring $$
-    text "exception" <+> text exceptionName <+>
+    reserved "exception" <+> declare exceptionName <+>
       block indentWidth line (map (\f -> field c f <> semi) exceptionFields)
     <> typeAnnots c exceptionAnnotations
 
@@ -168,7 +189,7 @@ instance Pretty (T.Exception a) where
 
 senum :: Config -> T.Senum ann -> Doc
 senum c@Config{indentWidth} T.Senum{..} = senumDocstring $$
-    text "senum" <+> text senumName <+>
+    reserved "senum" <+> declare senumName <+>
       encloseSep indentWidth lbrace rbrace comma (map literal senumValues)
     <> typeAnnots c senumAnnotations
 
@@ -176,34 +197,31 @@ instance Pretty (T.Senum a) where
     pretty = senum defaultConfig
 
 field :: Config -> T.Field ann -> Doc
-field c f = fieldDocstring $$
-    hcat [fid, req, typeReference c typ, space, text fieldName, def, annots]
-  where
-    T.Field
-        { fieldValueType = typ
-        , fieldRequiredness = requiredness
-        , ..
-        } = f
-    fid = case fieldIdentifier of
-      Nothing -> empty
-      Just i -> integer i <> colon <> space
-    req = case requiredness of
-      Nothing -> empty
-      Just r  -> fieldRequiredness r <> space
-    def = case fieldDefaultValue of
-      Nothing -> empty
-      Just v -> space <> equals <+> constantValue c v
-    annots = typeAnnots c fieldAnnotations
+field c T.Field{..} = fieldDocstring $$ hcat
+    [ case fieldIdentifier of
+        Nothing -> empty
+        Just i  -> yellow (integer i) <> colon <> space
+    , case fieldRequiredness of
+        Nothing -> empty
+        Just r  -> requiredness r <> space
+    , typeReference c fieldValueType
+    , space
+    , text fieldName
+    , case fieldDefaultValue of
+        Nothing -> empty
+        Just v  -> space <> equals <+> constantValue c v
+    , typeAnnots c fieldAnnotations
+    ]
 
 instance Pretty (T.Field a) where
     pretty = field defaultConfig
 
-fieldRequiredness :: T.FieldRequiredness -> Doc
-fieldRequiredness T.Optional = text "optional"
-fieldRequiredness T.Required = text "required"
+requiredness :: T.FieldRequiredness -> Doc
+requiredness T.Optional = reserved "optional"
+requiredness T.Required = reserved "required"
 
 instance Pretty T.FieldRequiredness where
-    pretty = fieldRequiredness
+    pretty = requiredness
 
 enumValue :: Config -> T.EnumDef ann -> Doc
 enumValue c T.EnumDef{..} = enumDefDocstring $$
@@ -211,7 +229,7 @@ enumValue c T.EnumDef{..} = enumDefDocstring $$
   where
     value = case enumDefValue of
       Nothing -> empty
-      Just v  -> space <> text "=" <+> integer v
+      Just v  -> space <> equals <+> integer v
 
 instance Pretty (T.EnumDef a) where
     pretty = enumValue defaultConfig
@@ -221,23 +239,29 @@ typeReference :: Config -> T.TypeReference ann -> Doc
 typeReference c ft = case ft of
   T.DefinedType t _ -> text t
 
-  T.StringType anns -> text "string" <> typeAnnots c anns
-  T.BinaryType anns -> text "binary" <> typeAnnots c anns
-  T.SListType  anns -> text "slist"  <> typeAnnots c anns
-  T.BoolType   anns -> text "bool"   <> typeAnnots c anns
-  T.ByteType   anns -> text "byte"   <> typeAnnots c anns
-  T.I16Type    anns -> text "i16"    <> typeAnnots c anns
-  T.I32Type    anns -> text "i32"    <> typeAnnots c anns
-  T.I64Type    anns -> text "i64"    <> typeAnnots c anns
-  T.DoubleType anns -> text "double" <> typeAnnots c anns
+  T.StringType anns -> reserved "string" <> typeAnnots c anns
+  T.BinaryType anns -> reserved "binary" <> typeAnnots c anns
+  T.SListType  anns -> reserved "slist"  <> typeAnnots c anns
+  T.BoolType   anns -> reserved "bool"   <> typeAnnots c anns
+  T.ByteType   anns -> reserved "byte"   <> typeAnnots c anns
+  T.I16Type    anns -> reserved "i16"    <> typeAnnots c anns
+  T.I32Type    anns -> reserved "i32"    <> typeAnnots c anns
+  T.I64Type    anns -> reserved "i64"    <> typeAnnots c anns
+  T.DoubleType anns -> reserved "double" <> typeAnnots c anns
 
   T.MapType k v anns ->
-    text "map" <> angles (typeReference c k <> comma <+> typeReference c v)
-               <> typeAnnots c anns
+    reserved "map"
+        <> enclose langle rangle
+            (typeReference c k <> comma <+> typeReference c v)
+        <> typeAnnots c anns
   T.SetType v anns ->
-    text "set" <> angles (typeReference c v) <> typeAnnots c anns
+    reserved "set"
+        <> enclose langle rangle (typeReference c v)
+        <> typeAnnots c anns
   T.ListType v anns ->
-    text "list" <> angles (typeReference c v) <> typeAnnots c anns
+    reserved "list"
+        <> enclose langle rangle (typeReference c v)
+        <> typeAnnots c anns
 
 instance Pretty (T.TypeReference a) where
     pretty = typeReference defaultConfig
@@ -275,18 +299,26 @@ instance Pretty T.TypeAnnotation where
     pretty = typeAnnot
 
 literal :: Text -> Doc
-literal = dquotes . text
+literal = cyan . dquotes . text
     -- TODO: escaping?
 
 text :: Text -> Doc
-text = PP.text . unpack
+text = P.text . unpack
 
+reserved :: String -> Doc
+reserved = magenta . P.text
+
+op :: String -> Doc
+op = yellow . P.text
+
+declare :: Text -> Doc
+declare = bold . text
 
 ($$) :: T.Docstring -> Doc -> Doc
 ($$) Nothing y = y
 ($$) (Just t) y = case lines (strip t) of
   [] -> y
-  ls -> wrapComments ls <$> y
+  ls -> dullblue (wrapComments ls) <$> y
   where
     wrapComments ls = align . vsep
       $ text "/**"
@@ -297,7 +329,7 @@ infixr 1 $$
 
 
 block :: Int -> Doc -> [Doc] -> Doc
-block indent s items = braces $
+block indent s items = enclose lbrace rbrace $
     nest indent (linebreak <> (items `sepBy` s)) <> linebreak
 
 sepBy :: [Doc] -> Doc -> Doc
@@ -313,3 +345,39 @@ encloseSep indent left right s vs = group $
   where go [] = empty
         go [x] = x
         go (x:xs) = (x <> s) <$> go xs
+
+lbrace :: Doc
+lbrace = op "{"
+
+rbrace :: Doc
+rbrace = op "}"
+
+lparen :: Doc
+lparen = op "("
+
+rparen :: Doc
+rparen = op ")"
+
+lbracket :: Doc
+lbracket = op "["
+
+rbracket :: Doc
+rbracket = op "]"
+
+langle :: Doc
+langle = op "<"
+
+rangle :: Doc
+rangle = op ">"
+
+comma :: Doc
+comma = op ","
+
+semi :: Doc
+semi = op ";"
+
+colon :: Doc
+colon = op ":"
+
+equals :: Doc
+equals = op "="
