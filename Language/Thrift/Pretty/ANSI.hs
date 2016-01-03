@@ -11,13 +11,20 @@
 -- Maintainer  :  Abhinav Gupta <mail@abhinavg.net>
 -- Stability   :  experimental
 --
--- This module is the same as "Language.Thrift.Pretty" but the pretty printer
--- used is the one provided by ansi-wl-pprint.
+-- This module provides a pretty printer for Thrift IDLs that produces colored
+-- output. It is essentially the same as "Language.Thrift.Pretty" with the
+-- exception of the colored output.
 --
--- The specifics of the printer can be configured using 'Config' objects.
+-- The behavior of the printer can be customized using 'Config' objects.
+--
+-- The system uses ANSI escape codes to produce colored output. That makes the
+-- text output of this pretty printer unparseable without printing to a
+-- supported terminal. If this is undesirable, use
+-- 'Text.PrettyPrint.ANSI.Leijen.plain' to discard coloring information, or
+-- simply use the "Language.Thrift.Pretty" pretty printer instead.
 --
 -- As with "Language.Thrift.Pretty", this module exports instances of the
--- 'Pretty' typeclass for @ansi-wl-pprint@.
+-- 'Pretty' typeclass for elements of the AST.
 module Language.Thrift.Pretty.ANSI
     (
       prettyPrint

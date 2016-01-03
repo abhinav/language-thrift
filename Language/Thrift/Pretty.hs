@@ -14,7 +14,7 @@
 -- This module provides a pretty printer for Thrift IDLs. The pretty printer
 -- preserves docstrings specified for types.
 --
--- The specifics of the printer can be configured using 'Config' objects.
+-- The behavior of the printer can be customized using 'Config' objects.
 --
 -- The module also exports instances of the 'Pretty' typeclass for elements of
 -- the AST.
