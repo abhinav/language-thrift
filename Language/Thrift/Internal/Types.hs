@@ -5,14 +5,22 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE TemplateHaskell        #-}
 module Language.Thrift.Internal.Types
-    ( Program(..)
+    (
+    -- * AST
+
+      Program(..)
+    , headers
+    , definitions
 
     , Header(..)
     , _Include
     , _Namespace
 
     , Include(..)
+    , path
+
     , Namespace(..)
+    , language
 
     , Definition(..)
     , _Const
@@ -21,6 +29,8 @@ module Language.Thrift.Internal.Types
 
     , Const(..)
     , Service(..)
+    , functions
+    , extends
 
     , Type(..)
     , _Typedef
@@ -31,6 +41,8 @@ module Language.Thrift.Internal.Types
     , _Senum
 
     , Typedef(..)
+    , targetType
+
     , Enum(..)
     , Struct(..)
     , Union(..)
@@ -42,6 +54,10 @@ module Language.Thrift.Internal.Types
     , _Optional
 
     , Field(..)
+    , identifier
+    , requiredness
+    , defaultValue
+
     , EnumDef(..)
 
     , ConstValue(..)
@@ -68,28 +84,21 @@ module Language.Thrift.Internal.Types
     , _ListType
 
     , Function(..)
+    , oneWay
+    , returnType
+    , parameters
+    , exceptions
+
     , TypeAnnotation(..)
     , Docstring
 
+    -- * Typeclasses
+
     , HasAnnotations(..)
-    , HasDefaultValue(..)
-    , HasDefinitions(..)
     , HasDocstring(..)
-    , HasExceptions(..)
-    , HasExtends(..)
     , HasFields(..)
-    , HasFunctions(..)
-    , HasHeaders(..)
-    , HasIdentifier(..)
-    , HasLanguage(..)
     , HasName(..)
-    , HasOneWay(..)
-    , HasParameters(..)
-    , HasPath(..)
-    , HasRequiredness(..)
-    , HasReturnType(..)
     , HasSrcAnnot(..)
-    , HasTargetType(..)
     , HasValue(..)
     , HasValues(..)
     , HasValueType(..)
@@ -100,8 +109,15 @@ import Data.Text    (Text)
 import GHC.Generics (Generic)
 import Prelude      hiding (Enum)
 
+import Language.Thrift.Internal.TH
+
 import qualified Control.Lens as L
 
+class HasSrcAnnot t where
+    srcAnnot :: L.Lens' (t a) a
+
+class HasName t where
+    name :: L.Lens' t Text
 
 -- | Type annoations may be added in various places in the form,
 --
@@ -117,8 +133,13 @@ data TypeAnnotation = TypeAnnotation
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''TypeAnnotation
+makeFieldsFor ["typeAnnotationValue"] ''TypeAnnotation
 
+instance HasName TypeAnnotation where
+    name = $(accessorLens 'typeAnnotationName)
+
+class HasAnnotations t where
+    annotations :: L.Lens' (t a) [TypeAnnotation]
 
 -- | Docstrings are Javadoc-style comments attached various defined objects.
 --
@@ -128,6 +149,8 @@ L.makeFields ''TypeAnnotation
 -- > Item getItem()
 type Docstring = Maybe Text
 
+class HasDocstring t where
+    docstring :: L.Lens' (t a) Docstring
 
 -- | A constant literal value in the IDL. Only a few basic types, lists, and
 -- maps can be presented in Thrift files as literals.
@@ -190,6 +213,9 @@ data TypeReference srcAnnot
 
 L.makePrisms ''TypeReference
 
+class HasValueType t where
+    valueType :: L.Lens' (t a) (TypeReference a)
+
 
 -- | Whether a field is required or optional.
 data FieldRequiredness
@@ -226,8 +252,29 @@ data Field srcAnnot = Field
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Field
+L.makeLensesFor
+    [ ("fieldIdentifier", "identifier")
+    , ("fieldRequiredness", "requiredness")
+    , ("fieldDefaultValue", "defaultValue")
+    ] ''Field
 
+instance HasName (Field a) where
+    name = $(accessorLens 'fieldName)
+
+instance HasValueType Field where
+    valueType = $(accessorLens 'fieldValueType)
+
+instance HasSrcAnnot Field where
+    srcAnnot = $(accessorLens 'fieldSrcAnnot)
+
+instance HasDocstring Field where
+    docstring = $(accessorLens 'fieldDocstring)
+
+instance HasAnnotations Field where
+    annotations = $(accessorLens 'fieldAnnotations)
+
+class HasFields t where
+    fields :: L.Lens' (t a) [Field a]
 
 -- | A function defined inside a service.
 data Function srcAnnot = Function
@@ -250,8 +297,24 @@ data Function srcAnnot = Function
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Function
+L.makeLensesFor
+    [ ("functionOneWay", "oneWay")
+    , ("functionReturnType", "returnType")
+    , ("functionParameters", "parameters")
+    , ("functionExceptions", "exceptions")
+    ] ''Function
 
+instance HasName (Function a) where
+    name = $(accessorLens 'functionName)
+
+instance HasSrcAnnot Function where
+    srcAnnot = $(accessorLens 'functionSrcAnnot)
+
+instance HasDocstring Function where
+    docstring = $(accessorLens 'functionDocstring)
+
+instance HasAnnotations Function where
+    annotations = $(accessorLens 'functionAnnotations)
 
 -- | A service definition.
 --
@@ -273,7 +336,22 @@ data Service srcAnnot = Service
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Service
+L.makeLensesFor
+    [ ("serviceExtends", "extends")
+    , ("serviceFunctions", "functions")
+    ] ''Service
+
+instance HasName (Service a) where
+    name = $(accessorLens 'serviceName)
+
+instance HasSrcAnnot Service where
+    srcAnnot = $(accessorLens 'serviceSrcAnnot)
+
+instance HasDocstring Service where
+    docstring = $(accessorLens 'serviceDocstring)
+
+instance HasAnnotations Service where
+    annotations = $(accessorLens 'serviceAnnotations)
 
 -- | A declared constant.
 --
@@ -291,8 +369,19 @@ data Const srcAnnot = Const
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Const
+makeFieldsFor ["constValue"] ''Const
 
+instance HasName (Const a) where
+    name = $(accessorLens 'constName)
+
+instance HasSrcAnnot Const where
+    srcAnnot = $(accessorLens 'constSrcAnnot)
+
+instance HasValueType Const where
+    valueType = $(accessorLens 'constValueType)
+
+instance HasDocstring Const where
+    docstring = $(accessorLens 'constDocstring)
 
 -- | A typedef is just an alias for another type.
 --
@@ -310,8 +399,19 @@ data Typedef srcAnnot = Typedef
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Typedef
+L.makeLensesFor [("typedefTargetType", "targetType")] ''Typedef
 
+instance HasName (Typedef a) where
+    name = $(accessorLens 'typedefName)
+
+instance HasSrcAnnot Typedef where
+    srcAnnot = $(accessorLens 'typedefSrcAnnot)
+
+instance HasDocstring Typedef where
+    docstring = $(accessorLens 'typedefDocstring)
+
+instance HasAnnotations Typedef where
+    annotations = $(accessorLens 'typedefAnnotations)
 
 -- | A named value inside an enum.
 data EnumDef srcAnnot = EnumDef
@@ -327,8 +427,19 @@ data EnumDef srcAnnot = EnumDef
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''EnumDef
+makeFieldsFor ["enumDefValue"] ''EnumDef
 
+instance HasName (EnumDef a) where
+    name = $(accessorLens 'enumDefName)
+
+instance HasSrcAnnot EnumDef where
+    srcAnnot = $(accessorLens 'enumDefSrcAnnot)
+
+instance HasDocstring EnumDef where
+    docstring = $(accessorLens 'enumDefDocstring)
+
+instance HasAnnotations EnumDef where
+    annotations = $(accessorLens 'enumDefAnnotations)
 
 -- | Enums are sets of named integer values.
 --
@@ -348,8 +459,19 @@ data Enum srcAnnot = Enum
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Enum
+makeFieldsFor ["enumValues"] ''Enum
 
+instance HasName (Enum a) where
+    name = $(accessorLens 'enumName)
+
+instance HasSrcAnnot Enum where
+    srcAnnot = $(accessorLens 'enumSrcAnnot)
+
+instance HasDocstring Enum where
+    docstring = $(accessorLens 'enumDocstring)
+
+instance HasAnnotations Enum where
+    annotations = $(accessorLens 'enumAnnotations)
 
 -- | A struct definition
 --
@@ -369,8 +491,20 @@ data Struct srcAnnot = Struct
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Struct
+instance HasName (Struct a) where
+    name = $(accessorLens 'structName)
 
+instance HasFields Struct where
+    fields = $(accessorLens 'structFields)
+
+instance HasSrcAnnot Struct where
+    srcAnnot = $(accessorLens 'structSrcAnnot)
+
+instance HasDocstring Struct where
+    docstring = $(accessorLens 'structDocstring)
+
+instance HasAnnotations Struct where
+    annotations = $(accessorLens 'structAnnotations)
 
 -- | A union of other types.
 --
@@ -391,8 +525,20 @@ data Union srcAnnot = Union
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Union
+instance HasName (Union a) where
+    name = $(accessorLens 'unionName)
 
+instance HasFields Union where
+    fields = $(accessorLens 'unionFields)
+
+instance HasSrcAnnot Union where
+    srcAnnot = $(accessorLens 'unionSrcAnnot)
+
+instance HasDocstring Union where
+    docstring = $(accessorLens 'unionDocstring)
+
+instance HasAnnotations Union where
+    annotations = $(accessorLens 'unionAnnotations)
 
 -- | Exception types.
 --
@@ -413,8 +559,20 @@ data Exception srcAnnot = Exception
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Exception
+instance HasName (Exception a) where
+    name = $(accessorLens 'exceptionName)
 
+instance HasFields Exception where
+    fields = $(accessorLens 'exceptionFields)
+
+instance HasSrcAnnot Exception where
+    srcAnnot = $(accessorLens 'exceptionSrcAnnot)
+
+instance HasDocstring Exception where
+    docstring = $(accessorLens 'exceptionDocstring)
+
+instance HasAnnotations Exception where
+    annotations = $(accessorLens 'exceptionAnnotations)
 
 -- | An string-only enum. These are a deprecated feature of Thrift and
 -- shouldn't be used.
@@ -429,8 +587,19 @@ data Senum srcAnnot = Senum
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Senum
+makeFieldsFor ["senumValues"] ''Senum
 
+instance HasName (Senum a) where
+    name = $(accessorLens 'senumName)
+
+instance HasSrcAnnot Senum where
+    srcAnnot = $(accessorLens 'senumSrcAnnot)
+
+instance HasDocstring Senum where
+    docstring = $(accessorLens 'senumDocstring)
+
+instance HasAnnotations Senum where
+    annotations = $(accessorLens 'senumAnnotations)
 
 -- | Defines the various types that can be declared in Thrift.
 data Type srcAnnot
@@ -530,8 +699,13 @@ data Namespace srcAnnot = Namespace
     }
     deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Namespace
+L.makeLensesFor [("namespaceLanguage", "language")] ''Namespace
 
+instance HasName (Namespace a) where
+    name = $(accessorLens 'namespaceName)
+
+instance HasSrcAnnot Namespace where
+    srcAnnot = $(accessorLens 'namespaceSrcAnnot)
 
 -- | The IDL includes another Thrift file.
 --
@@ -546,8 +720,10 @@ data Include srcAnnot = Include
     }
     deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Include
+L.makeLensesFor [("includePath", "path")] ''Include
 
+instance HasSrcAnnot Include where
+    srcAnnot = $(accessorLens 'includeSrcAnnot)
 
 -- | Headers for a program.
 data Header srcAnnot
@@ -579,4 +755,7 @@ data Program srcAnnot = Program
     }
     deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeFields ''Program
+L.makeLensesFor
+    [ ("programHeaders", "headers")
+    , ("programDefinitions", "definitions")
+    ] ''Program

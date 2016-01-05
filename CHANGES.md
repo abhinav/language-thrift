@@ -1,3 +1,8 @@
+0.6.2.0
+=======
+
+-   Use more concrete types for lenses which don't need overloading.
+
 0.6.1.0
 =======
 
