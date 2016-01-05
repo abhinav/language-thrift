@@ -139,7 +139,7 @@ instance HasName TypeAnnotation where
     name = $(accessorLens 'typeAnnotationName)
 
 class HasAnnotations t where
-    annotations :: L.Lens' (t a) [TypeAnnotation]
+    annotations :: L.Lens' t [TypeAnnotation]
 
 -- | Docstrings are Javadoc-style comments attached various defined objects.
 --
@@ -150,7 +150,7 @@ class HasAnnotations t where
 type Docstring = Maybe Text
 
 class HasDocstring t where
-    docstring :: L.Lens' (t a) Docstring
+    docstring :: L.Lens' t Docstring
 
 -- | A constant literal value in the IDL. Only a few basic types, lists, and
 -- maps can be presented in Thrift files as literals.
@@ -267,10 +267,10 @@ instance HasValueType Field where
 instance HasSrcAnnot Field where
     srcAnnot = $(accessorLens 'fieldSrcAnnot)
 
-instance HasDocstring Field where
+instance HasDocstring (Field a) where
     docstring = $(accessorLens 'fieldDocstring)
 
-instance HasAnnotations Field where
+instance HasAnnotations (Field a) where
     annotations = $(accessorLens 'fieldAnnotations)
 
 class HasFields t where
@@ -310,10 +310,10 @@ instance HasName (Function a) where
 instance HasSrcAnnot Function where
     srcAnnot = $(accessorLens 'functionSrcAnnot)
 
-instance HasDocstring Function where
+instance HasDocstring (Function a) where
     docstring = $(accessorLens 'functionDocstring)
 
-instance HasAnnotations Function where
+instance HasAnnotations (Function a) where
     annotations = $(accessorLens 'functionAnnotations)
 
 -- | A service definition.
@@ -347,10 +347,10 @@ instance HasName (Service a) where
 instance HasSrcAnnot Service where
     srcAnnot = $(accessorLens 'serviceSrcAnnot)
 
-instance HasDocstring Service where
+instance HasDocstring (Service a) where
     docstring = $(accessorLens 'serviceDocstring)
 
-instance HasAnnotations Service where
+instance HasAnnotations (Service a) where
     annotations = $(accessorLens 'serviceAnnotations)
 
 -- | A declared constant.
@@ -380,7 +380,7 @@ instance HasSrcAnnot Const where
 instance HasValueType Const where
     valueType = $(accessorLens 'constValueType)
 
-instance HasDocstring Const where
+instance HasDocstring (Const a) where
     docstring = $(accessorLens 'constDocstring)
 
 -- | A typedef is just an alias for another type.
@@ -407,10 +407,10 @@ instance HasName (Typedef a) where
 instance HasSrcAnnot Typedef where
     srcAnnot = $(accessorLens 'typedefSrcAnnot)
 
-instance HasDocstring Typedef where
+instance HasDocstring (Typedef a) where
     docstring = $(accessorLens 'typedefDocstring)
 
-instance HasAnnotations Typedef where
+instance HasAnnotations (Typedef a) where
     annotations = $(accessorLens 'typedefAnnotations)
 
 -- | A named value inside an enum.
@@ -435,10 +435,10 @@ instance HasName (EnumDef a) where
 instance HasSrcAnnot EnumDef where
     srcAnnot = $(accessorLens 'enumDefSrcAnnot)
 
-instance HasDocstring EnumDef where
+instance HasDocstring (EnumDef a) where
     docstring = $(accessorLens 'enumDefDocstring)
 
-instance HasAnnotations EnumDef where
+instance HasAnnotations (EnumDef a) where
     annotations = $(accessorLens 'enumDefAnnotations)
 
 -- | Enums are sets of named integer values.
@@ -467,10 +467,10 @@ instance HasName (Enum a) where
 instance HasSrcAnnot Enum where
     srcAnnot = $(accessorLens 'enumSrcAnnot)
 
-instance HasDocstring Enum where
+instance HasDocstring (Enum a) where
     docstring = $(accessorLens 'enumDocstring)
 
-instance HasAnnotations Enum where
+instance HasAnnotations (Enum a) where
     annotations = $(accessorLens 'enumAnnotations)
 
 -- | A struct definition
@@ -500,10 +500,10 @@ instance HasFields Struct where
 instance HasSrcAnnot Struct where
     srcAnnot = $(accessorLens 'structSrcAnnot)
 
-instance HasDocstring Struct where
+instance HasDocstring (Struct a) where
     docstring = $(accessorLens 'structDocstring)
 
-instance HasAnnotations Struct where
+instance HasAnnotations (Struct a) where
     annotations = $(accessorLens 'structAnnotations)
 
 -- | A union of other types.
@@ -534,10 +534,10 @@ instance HasFields Union where
 instance HasSrcAnnot Union where
     srcAnnot = $(accessorLens 'unionSrcAnnot)
 
-instance HasDocstring Union where
+instance HasDocstring (Union a) where
     docstring = $(accessorLens 'unionDocstring)
 
-instance HasAnnotations Union where
+instance HasAnnotations (Union a) where
     annotations = $(accessorLens 'unionAnnotations)
 
 -- | Exception types.
@@ -568,10 +568,10 @@ instance HasFields Exception where
 instance HasSrcAnnot Exception where
     srcAnnot = $(accessorLens 'exceptionSrcAnnot)
 
-instance HasDocstring Exception where
+instance HasDocstring (Exception a) where
     docstring = $(accessorLens 'exceptionDocstring)
 
-instance HasAnnotations Exception where
+instance HasAnnotations (Exception a) where
     annotations = $(accessorLens 'exceptionAnnotations)
 
 -- | An string-only enum. These are a deprecated feature of Thrift and
@@ -595,10 +595,10 @@ instance HasName (Senum a) where
 instance HasSrcAnnot Senum where
     srcAnnot = $(accessorLens 'senumSrcAnnot)
 
-instance HasDocstring Senum where
+instance HasDocstring (Senum a) where
     docstring = $(accessorLens 'senumDocstring)
 
-instance HasAnnotations Senum where
+instance HasAnnotations (Senum a) where
     annotations = $(accessorLens 'senumAnnotations)
 
 -- | Defines the various types that can be declared in Thrift.
