@@ -3,7 +3,7 @@
 
 -   Added source annotations to all `TypeReference` and `ConstValue`
     constructors.
--   Added a `name` and `srcAnnot` lenses for `Type` and `Definition`.
+-   Added `name` and `srcAnnot` lenses for `Type` and `Definition`.
 
 0.6.2.0
 =======
