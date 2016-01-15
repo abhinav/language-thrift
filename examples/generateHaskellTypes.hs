@@ -55,29 +55,29 @@ tupled :: [Doc] -> Doc
 tupled = encloseSep lparen rparen (text ", ")
 
 renderConstValue :: T.ConstValue a -> Doc
-renderConstValue (T.ConstInt i) = integer i
-renderConstValue (T.ConstFloat f) = double f
-renderConstValue (T.ConstLiteral l) = dquotes $ text (unpack l) -- TODO escaping
+renderConstValue (T.ConstInt i _) = integer i
+renderConstValue (T.ConstFloat f _) = double f
+renderConstValue (T.ConstLiteral l _) = dquotes $ text (unpack l) -- TODO escaping
 renderConstValue (T.ConstIdentifier i _) = text (unpack i)
-renderConstValue (T.ConstList l) = list (map renderConstValue l)
-renderConstValue (T.ConstMap m) = text "Map.fromList" <+> list (map renderConstTuple m)
+renderConstValue (T.ConstList l _) = list (map renderConstValue l)
+renderConstValue (T.ConstMap m _) = text "Map.fromList" <+> list (map renderConstTuple m)
   where
     renderConstTuple (a, b) = tupled [renderConstValue a, renderConstValue b]
 
 renderTypeReference :: Show a => T.TypeReference a -> Doc
 renderTypeReference (T.DefinedType t _) = text (unpack t)
-renderTypeReference (T.StringType _) = text "Text"
-renderTypeReference (T.BinaryType _) = text "ByteString"
-renderTypeReference (T.BoolType _) = text "Bool"
-renderTypeReference (T.ByteType _) = text "Word8"
-renderTypeReference (T.I16Type _) = text "Word16"
-renderTypeReference (T.I32Type _) = text "Word32"
-renderTypeReference (T.I64Type _) = text "Word64"
-renderTypeReference (T.DoubleType _) = text "Double"
-renderTypeReference (T.MapType k v _) =
+renderTypeReference (T.StringType _ _) = text "Text"
+renderTypeReference (T.BinaryType _ _) = text "ByteString"
+renderTypeReference (T.BoolType _ _) = text "Bool"
+renderTypeReference (T.ByteType _ _) = text "Word8"
+renderTypeReference (T.I16Type _ _) = text "Word16"
+renderTypeReference (T.I32Type _ _) = text "Word32"
+renderTypeReference (T.I64Type _ _) = text "Word64"
+renderTypeReference (T.DoubleType _ _) = text "Double"
+renderTypeReference (T.MapType k v _ _) =
     parens $ hsep [text "Map", renderTypeReference k, renderTypeReference v]
-renderTypeReference (T.SetType i _) = parens $ text "Set" <+> renderTypeReference i
-renderTypeReference (T.ListType i _) = brackets $ renderTypeReference i
+renderTypeReference (T.SetType i _ _) = parens $ text "Set" <+> renderTypeReference i
+renderTypeReference (T.ListType i _ _) = brackets $ renderTypeReference i
 renderTypeReference t = error $ "Unsupported field type: " ++ show t
 
 renderStructField :: Show a => Text -> T.Field a -> Doc
