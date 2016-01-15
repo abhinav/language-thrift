@@ -1,3 +1,10 @@
+0.7.0.0
+=======
+
+-   Added source annotations to all `TypeReference` and `ConstValue`
+    constructors.
+-   Added a `name` and `srcAnnot` lenses for `Type` and `Definition`.
+
 0.6.2.0
 =======
 

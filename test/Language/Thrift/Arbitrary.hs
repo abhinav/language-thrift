@@ -221,23 +221,22 @@ instance Arbitrary (T.Field ()) where
 instance Arbitrary (T.TypeReference ()) where
     shrink = genericShrink
     arbitrary = oneof
-        [ T.DefinedType <$> arbitrary <*> pure ()
-
-        , halfSize $ T.StringType  <$> arbitrary
-        , halfSize $ T.BinaryType  <$> arbitrary
-        , halfSize $ T.SListType   <$> arbitrary
-        , halfSize $ T.BoolType    <$> arbitrary
-        , halfSize $ T.ByteType    <$> arbitrary
-        , halfSize $ T.I16Type     <$> arbitrary
-        , halfSize $ T.I32Type     <$> arbitrary
-        , halfSize $ T.I64Type     <$> arbitrary
-        , halfSize $ T.DoubleType  <$> arbitrary
-        , halfSize $ T.MapType     <$> arbitrary <*> arbitrary <*> arbitrary
-        , halfSize $ T.SetType     <$> arbitrary <*> arbitrary
-        , halfSize $ T.ListType    <$> arbitrary <*> arbitrary
+        [ T.DefinedType           <$> arbitrary <*> pure ()
+        , halfSize $ T.StringType <$> arbitrary <*> pure ()
+        , halfSize $ T.BinaryType <$> arbitrary <*> pure ()
+        , halfSize $ T.SListType  <$> arbitrary <*> pure ()
+        , halfSize $ T.BoolType   <$> arbitrary <*> pure ()
+        , halfSize $ T.ByteType   <$> arbitrary <*> pure ()
+        , halfSize $ T.I16Type    <$> arbitrary <*> pure ()
+        , halfSize $ T.I32Type    <$> arbitrary <*> pure ()
+        , halfSize $ T.I64Type    <$> arbitrary <*> pure ()
+        , halfSize $ T.DoubleType <$> arbitrary <*> pure ()
+        , halfSize $ T.MapType    <$> arbitrary <*> arbitrary <*> arbitrary <*> pure ()
+        , halfSize $ T.SetType    <$> arbitrary <*> arbitrary <*> pure ()
+        , halfSize $ T.ListType   <$> arbitrary <*> arbitrary <*> pure ()
         ]
 
-instance Arbitrary (T.FieldRequiredness) where
+instance Arbitrary T.FieldRequiredness where
     shrink = genericShrink
     arbitrary = elements [T.Required, T.Optional]
 
@@ -254,9 +253,9 @@ newtype BasicConstValue = BasicConstValue {
 instance Arbitrary BasicConstValue where
     shrink = genericShrink
     arbitrary = BasicConstValue <$> oneof
-        [ T.ConstFloat      <$> choose (0.0, 10000.0)
-        , T.ConstInt        <$> arbitrary
-        , T.ConstLiteral    <$> arbitrary
+        [ T.ConstFloat      <$> choose (0.0, 10000.0) <*> pure ()
+        , T.ConstInt        <$> arbitrary <*> pure ()
+        , T.ConstLiteral    <$> arbitrary <*> pure ()
         , T.ConstIdentifier <$> arbitrary <*> pure ()
         ]
 
@@ -270,8 +269,8 @@ instance Arbitrary FiniteConstValue where
     shrink = genericShrink
     arbitrary = FiniteConstValue <$> oneof
         [ basicConsts
-        , T.ConstList <$> constList
-        , T.ConstMap  <$> constMap
+        , T.ConstList <$> constList <*> pure ()
+        , T.ConstMap  <$> constMap <*> pure ()
         ]
       where
         basicConsts = getBasicConstValue <$> arbitrary

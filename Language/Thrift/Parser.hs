@@ -429,12 +429,13 @@ constant = do
 -- | A constant value literal.
 constantValue
     :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.ConstValue n)
-constantValue = choice [
-    either T.ConstInt T.ConstFloat <$> integerOrDouble
-  , T.ConstLiteral <$> literal
-  , withSrcAnnot (T.ConstIdentifier <$> identifier)
-  , T.ConstList <$> constList
-  , T.ConstMap <$> constMap
+constantValue = withSrcAnnot $ choice [
+    either T.ConstInt T.ConstFloat
+                      <$> integerOrDouble
+  , T.ConstLiteral    <$> literal
+  , T.ConstIdentifier <$> identifier
+  , T.ConstList       <$> constList
+  , T.ConstMap        <$> constMap
   ]
 
 
@@ -483,7 +484,7 @@ typeReference = choice [
 
 baseType
     :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
-baseType =
+baseType = withSrcAnnot $
     choice [reserved s *> (v <$> typeAnnotations) | (s, v) <- bases]
   where
     bases = [
@@ -502,7 +503,7 @@ baseType =
 
 containerType
     :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
-containerType =
+containerType = withSrcAnnot $
     choice [mapType, setType, listType] <*> typeAnnotations
   where
     mapType = reserved "map" >>

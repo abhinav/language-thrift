@@ -157,46 +157,62 @@ class HasDocstring t where
 --
 -- Constants are used for IDL-level constants and default values for fields.
 data ConstValue srcAnnot
-    = ConstInt Integer
+    = ConstInt Integer srcAnnot
     -- ^ An integer. @42@
-    | ConstFloat Double
+    | ConstFloat Double srcAnnot
     -- ^ A float. @4.2@
-    | ConstLiteral Text
+    | ConstLiteral Text srcAnnot
     -- ^ A literal string. @"hello"@
     | ConstIdentifier Text srcAnnot
     -- ^ A reference to another constant. @Foo.bar@
-    | ConstList [ConstValue srcAnnot]
+    | ConstList [ConstValue srcAnnot] srcAnnot
     -- ^ A literal list containing other constant values. @[42]@
-    | ConstMap [(ConstValue srcAnnot, ConstValue srcAnnot)]
+    | ConstMap [(ConstValue srcAnnot, ConstValue srcAnnot)] srcAnnot
     -- ^ A literal list containing other constant values.
     -- @{"hellO": 1, "world": 2}@
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 L.makePrisms ''ConstValue
 
+instance HasSrcAnnot ConstValue where
+    srcAnnot = L.lens getter setter
+      where
+        getter (ConstInt        _ a) = a
+        getter (ConstFloat      _ a) = a
+        getter (ConstLiteral    _ a) = a
+        getter (ConstIdentifier _ a) = a
+        getter (ConstList       _ a) = a
+        getter (ConstMap        _ a) = a
+
+        setter (ConstInt        x _) a = ConstInt        x a
+        setter (ConstFloat      x _) a = ConstFloat      x a
+        setter (ConstLiteral    x _) a = ConstLiteral    x a
+        setter (ConstIdentifier x _) a = ConstIdentifier x a
+        setter (ConstList       x _) a = ConstList       x a
+        setter (ConstMap        x _) a = ConstMap        x a
 
 -- | A reference to a type.
 data TypeReference srcAnnot
     = DefinedType Text srcAnnot
     -- ^ A custom defined type referred to by name.
 
-    | StringType [TypeAnnotation]
+    | StringType [TypeAnnotation] srcAnnot
     -- ^ @string@ and annotations.
-    | BinaryType [TypeAnnotation]
+    | BinaryType [TypeAnnotation] srcAnnot
     -- ^ @binary@ and annotations.
-    | SListType [TypeAnnotation]
+    | SListType [TypeAnnotation] srcAnnot
     -- ^ @slist@ and annotations.
-    | BoolType [TypeAnnotation]
+    | BoolType [TypeAnnotation] srcAnnot
     -- ^ @bool@ and annotations.
-    | ByteType [TypeAnnotation]
+    | ByteType [TypeAnnotation] srcAnnot
     -- ^ @byte@ and annotations.
-    | I16Type [TypeAnnotation]
+    | I16Type [TypeAnnotation] srcAnnot
     -- ^ @i16@ and annotations.
-    | I32Type [TypeAnnotation]
+    | I32Type [TypeAnnotation] srcAnnot
     -- ^ @i32@ and annotations.
-    | I64Type [TypeAnnotation]
+    | I64Type [TypeAnnotation] srcAnnot
     -- ^ @i64@ and annotations.
-    | DoubleType [TypeAnnotation]
+    | DoubleType [TypeAnnotation] srcAnnot
     -- ^ @double@ and annotations.
 
     -- Container types
@@ -204,14 +220,46 @@ data TypeReference srcAnnot
         (TypeReference srcAnnot)
         (TypeReference srcAnnot)
         [TypeAnnotation]
+        srcAnnot
     -- ^ @map\<foo, bar\>@ and annotations.
-    | SetType (TypeReference srcAnnot) [TypeAnnotation]
+    | SetType (TypeReference srcAnnot) [TypeAnnotation] srcAnnot
     -- ^ @set\<baz\>@ and annotations.
-    | ListType (TypeReference srcAnnot) [TypeAnnotation]
+    | ListType (TypeReference srcAnnot) [TypeAnnotation] srcAnnot
     -- ^ @list\<qux\>@ and annotations.
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 L.makePrisms ''TypeReference
+
+instance HasSrcAnnot TypeReference where
+    srcAnnot = L.lens getter setter
+      where
+        getter (DefinedType _ a) = a
+        getter (StringType  _ a) = a
+        getter (BinaryType  _ a) = a
+        getter (SListType   _ a) = a
+        getter (BoolType    _ a) = a
+        getter (ByteType    _ a) = a
+        getter (I16Type     _ a) = a
+        getter (I32Type     _ a) = a
+        getter (I64Type     _ a) = a
+        getter (DoubleType  _ a) = a
+        getter (MapType _ _ _ a) = a
+        getter (SetType   _ _ a) = a
+        getter (ListType  _ _ a) = a
+
+        setter (DefinedType x _) a = DefinedType x a
+        setter (StringType  x _) a = StringType  x a
+        setter (BinaryType  x _) a = BinaryType  x a
+        setter (SListType   x _) a = SListType   x a
+        setter (BoolType    x _) a = BoolType    x a
+        setter (ByteType    x _) a = ByteType    x a
+        setter (I16Type     x _) a = I16Type     x a
+        setter (I32Type     x _) a = I32Type     x a
+        setter (I64Type     x _) a = I64Type     x a
+        setter (DoubleType  x _) a = DoubleType  x a
+        setter (MapType k v x _) a = MapType k v x a
+        setter (SetType   t x _) a = SetType   t x a
+        setter (ListType  t x _) a = ListType  t x a
 
 class HasValueType t where
     valueType :: L.Lens' (t a) (TypeReference a)
@@ -617,6 +665,40 @@ data Type srcAnnot
       SenumType (Senum srcAnnot)
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
+instance HasName (Type a) where
+    name = L.lens getter setter
+      where
+        getter (TypedefType   t) = L.view name t
+        getter (EnumType      t) = L.view name t
+        getter (StructType    t) = L.view name t
+        getter (UnionType     t) = L.view name t
+        getter (ExceptionType t) = L.view name t
+        getter (SenumType     t) = L.view name t
+
+        setter (TypedefType   t) n = TypedefType   $ L.set name n t
+        setter (EnumType      t) n = EnumType      $ L.set name n t
+        setter (StructType    t) n = StructType    $ L.set name n t
+        setter (UnionType     t) n = UnionType     $ L.set name n t
+        setter (ExceptionType t) n = ExceptionType $ L.set name n t
+        setter (SenumType     t) n = SenumType     $ L.set name n t
+
+instance HasSrcAnnot Type where
+    srcAnnot = L.lens getter setter
+      where
+        getter (TypedefType   t) = L.view srcAnnot t
+        getter (EnumType      t) = L.view srcAnnot t
+        getter (StructType    t) = L.view srcAnnot t
+        getter (UnionType     t) = L.view srcAnnot t
+        getter (ExceptionType t) = L.view srcAnnot t
+        getter (SenumType     t) = L.view srcAnnot t
+
+        setter (TypedefType   t) a = TypedefType   $ L.set srcAnnot a t
+        setter (EnumType      t) a = EnumType      $ L.set srcAnnot a t
+        setter (StructType    t) a = StructType    $ L.set srcAnnot a t
+        setter (UnionType     t) a = UnionType     $ L.set srcAnnot a t
+        setter (ExceptionType t) a = ExceptionType $ L.set srcAnnot a t
+        setter (SenumType     t) a = SenumType     $ L.set srcAnnot a t
+
 _Typedef :: L.Prism' (Type ann) (Typedef ann)
 _Typedef = L.prism' TypedefType $ \t ->
     case t of
@@ -664,6 +746,29 @@ data Definition srcAnnot
     | -- | A service definition.
       ServiceDefinition (Service srcAnnot)
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+instance HasName (Definition a) where
+    name = L.lens getter setter
+      where
+        getter (ConstDefinition   d) = L.view name d
+        getter (TypeDefinition    d) = L.view name d
+        getter (ServiceDefinition d) = L.view name d
+
+        setter (ConstDefinition   d) n = ConstDefinition   $ L.set name n d
+        setter (TypeDefinition    d) n = TypeDefinition    $ L.set name n d
+        setter (ServiceDefinition d) n = ServiceDefinition $ L.set name n d
+
+instance HasSrcAnnot Definition where
+    srcAnnot = L.lens getter setter
+      where
+        getter (ConstDefinition   d) = L.view srcAnnot d
+        getter (TypeDefinition    d) = L.view srcAnnot d
+        getter (ServiceDefinition d) = L.view srcAnnot d
+
+        setter (ConstDefinition   d) a = ConstDefinition   $ L.set srcAnnot a d
+        setter (TypeDefinition    d) a = TypeDefinition    $ L.set srcAnnot a d
+        setter (ServiceDefinition d) a = ServiceDefinition $ L.set srcAnnot a d
+
 
 _Const :: L.Prism' (Definition ann) (Const ann)
 _Const = L.prism' ConstDefinition $ \def ->

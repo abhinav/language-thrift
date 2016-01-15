@@ -239,26 +239,26 @@ typeReference :: Config -> T.TypeReference ann -> Doc
 typeReference c ft = case ft of
   T.DefinedType t _ -> text t
 
-  T.StringType anns -> reserved "string" <> typeAnnots c anns
-  T.BinaryType anns -> reserved "binary" <> typeAnnots c anns
-  T.SListType  anns -> reserved "slist"  <> typeAnnots c anns
-  T.BoolType   anns -> reserved "bool"   <> typeAnnots c anns
-  T.ByteType   anns -> reserved "byte"   <> typeAnnots c anns
-  T.I16Type    anns -> reserved "i16"    <> typeAnnots c anns
-  T.I32Type    anns -> reserved "i32"    <> typeAnnots c anns
-  T.I64Type    anns -> reserved "i64"    <> typeAnnots c anns
-  T.DoubleType anns -> reserved "double" <> typeAnnots c anns
+  T.StringType anns _ -> reserved "string" <> typeAnnots c anns
+  T.BinaryType anns _ -> reserved "binary" <> typeAnnots c anns
+  T.SListType  anns _ -> reserved "slist"  <> typeAnnots c anns
+  T.BoolType   anns _ -> reserved "bool"   <> typeAnnots c anns
+  T.ByteType   anns _ -> reserved "byte"   <> typeAnnots c anns
+  T.I16Type    anns _ -> reserved "i16"    <> typeAnnots c anns
+  T.I32Type    anns _ -> reserved "i32"    <> typeAnnots c anns
+  T.I64Type    anns _ -> reserved "i64"    <> typeAnnots c anns
+  T.DoubleType anns _ -> reserved "double" <> typeAnnots c anns
 
-  T.MapType k v anns ->
+  T.MapType k v anns _ ->
     reserved "map"
         <> enclose langle rangle
             (typeReference c k <> comma <+> typeReference c v)
         <> typeAnnots c anns
-  T.SetType v anns ->
+  T.SetType v anns _ ->
     reserved "set"
         <> enclose langle rangle (typeReference c v)
         <> typeAnnots c anns
-  T.ListType v anns ->
+  T.ListType v anns _ ->
     reserved "list"
         <> enclose langle rangle (typeReference c v)
         <> typeAnnots c anns
@@ -269,13 +269,13 @@ instance Pretty (T.TypeReference a) where
 -- | Pretty print a constant value.
 constantValue :: Config -> T.ConstValue ann -> Doc
 constantValue c@Config{indentWidth} value = case value of
-  T.ConstInt i -> integer i
-  T.ConstFloat f -> double f
-  T.ConstLiteral l -> literal l
-  T.ConstIdentifier i _ -> text i
-  T.ConstList vs ->
+  T.ConstInt        i _ -> integer i
+  T.ConstFloat      f _ -> double  f
+  T.ConstLiteral    l _ -> literal l
+  T.ConstIdentifier i _ -> text    i
+  T.ConstList      vs _ ->
     encloseSep indentWidth lbracket rbracket comma $ map (constantValue c) vs
-  T.ConstMap vs ->
+  T.ConstMap       vs _ ->
     encloseSep indentWidth lbrace rbrace comma $
       map (\(k, v) -> constantValue c k <> colon <+> constantValue c v) vs
 
