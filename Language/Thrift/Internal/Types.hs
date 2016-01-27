@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE TemplateHaskell        #-}
 module Language.Thrift.Internal.Types
     (
     -- * AST
@@ -104,20 +103,20 @@ module Language.Thrift.Internal.Types
     , HasValueType(..)
     ) where
 
+import Control.Lens (Lens', Prism', lens, prism', set, view)
 import Data.Data    (Data, Typeable)
 import Data.Text    (Text)
 import GHC.Generics (Generic)
 import Prelude      hiding (Enum)
 
-import Language.Thrift.Internal.TH
-
-import qualified Control.Lens as L
-
 class HasSrcAnnot t where
-    srcAnnot :: L.Lens' (t a) a
+    srcAnnot :: Lens' (t a) a
 
 class HasName t where
-    name :: L.Lens' t Text
+    name :: Lens' t Text
+
+class HasValue s a | s -> a where
+    value :: Lens' s a
 
 -- | Type annoations may be added in various places in the form,
 --
@@ -133,13 +132,14 @@ data TypeAnnotation = TypeAnnotation
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-makeFieldsFor ["typeAnnotationValue"] ''TypeAnnotation
-
 instance HasName TypeAnnotation where
-    name = $(accessorLens 'typeAnnotationName)
+    name = lens typeAnnotationName (\s a -> s { typeAnnotationName = a })
+
+instance HasValue TypeAnnotation (Maybe Text) where
+    value = lens typeAnnotationValue (\s a -> s { typeAnnotationValue = a })
 
 class HasAnnotations t where
-    annotations :: L.Lens' t [TypeAnnotation]
+    annotations :: Lens' t [TypeAnnotation]
 
 -- | Docstrings are Javadoc-style comments attached various defined objects.
 --
@@ -150,7 +150,7 @@ class HasAnnotations t where
 type Docstring = Maybe Text
 
 class HasDocstring t where
-    docstring :: L.Lens' t Docstring
+    docstring :: Lens' t Docstring
 
 -- | A constant literal value in the IDL. Only a few basic types, lists, and
 -- maps can be presented in Thrift files as literals.
@@ -172,10 +172,44 @@ data ConstValue srcAnnot
     -- @{"hellO": 1, "world": 2}@
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makePrisms ''ConstValue
+_ConstInt :: Prism' (ConstValue a) (Integer, a)
+_ConstInt = prism' (uncurry ConstInt) $ \c ->
+    case c of
+        ConstInt v a -> Just (v, a)
+        _            -> Nothing
+
+_ConstFloat :: Prism' (ConstValue a) (Double, a)
+_ConstFloat = prism' (uncurry ConstFloat) $ \c ->
+    case c of
+        ConstFloat v a -> Just (v, a)
+        _              -> Nothing
+
+_ConstLiteral :: Prism' (ConstValue a) (Text, a)
+_ConstLiteral = prism' (uncurry ConstLiteral) $ \c ->
+    case c of
+        ConstLiteral v a -> Just (v, a)
+        _                -> Nothing
+
+_ConstIdentifier :: Prism' (ConstValue a) (Text, a)
+_ConstIdentifier = prism' (uncurry ConstIdentifier) $ \c ->
+    case c of
+        ConstIdentifier v a -> Just (v, a)
+        _                   -> Nothing
+
+_ConstList :: Prism' (ConstValue a) ([ConstValue a], a)
+_ConstList = prism' (uncurry ConstList) $ \c ->
+    case c of
+        ConstList v a -> Just (v, a)
+        _             -> Nothing
+
+_ConstMap :: Prism' (ConstValue a) ([(ConstValue a, ConstValue a)], a)
+_ConstMap = prism' (uncurry ConstMap) $ \c ->
+    case c of
+        ConstMap v a -> Just (v, a)
+        _            -> Nothing
 
 instance HasSrcAnnot ConstValue where
-    srcAnnot = L.lens getter setter
+    srcAnnot = lens getter setter
       where
         getter (ConstInt        _ a) = a
         getter (ConstFloat      _ a) = a
@@ -228,10 +262,86 @@ data TypeReference srcAnnot
     -- ^ @list\<qux\>@ and annotations.
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makePrisms ''TypeReference
+_DefinedType :: Prism' (TypeReference a) (Text, a)
+_DefinedType = prism' (uncurry DefinedType) $ \r ->
+    case r of
+        DefinedType t a -> Just (t, a)
+        _               -> Nothing
+
+_StringType :: Prism' (TypeReference a) ([TypeAnnotation], a)
+_StringType = prism' (uncurry StringType) $ \r ->
+    case r of
+        StringType t a -> Just (t, a)
+        _              -> Nothing
+
+_BinaryType :: Prism' (TypeReference a) ([TypeAnnotation], a)
+_BinaryType = prism' (uncurry BinaryType) $ \r ->
+    case r of
+        BinaryType t a -> Just (t, a)
+        _              -> Nothing
+
+_SListType :: Prism' (TypeReference a) ([TypeAnnotation], a)
+_SListType = prism' (uncurry SListType) $ \r ->
+    case r of
+        SListType t a -> Just (t, a)
+        _             -> Nothing
+
+_BoolType :: Prism' (TypeReference a) ([TypeAnnotation], a)
+_BoolType = prism' (uncurry BoolType) $ \r ->
+    case r of
+        BoolType t a -> Just (t, a)
+        _            -> Nothing
+
+_ByteType :: Prism' (TypeReference a) ([TypeAnnotation], a)
+_ByteType = prism' (uncurry ByteType) $ \r ->
+    case r of
+        ByteType t a -> Just (t, a)
+        _            -> Nothing
+
+_I16Type :: Prism' (TypeReference a) ([TypeAnnotation], a)
+_I16Type = prism' (uncurry I16Type) $ \r ->
+    case r of
+        I16Type t a -> Just (t, a)
+        _           -> Nothing
+
+_I32Type :: Prism' (TypeReference a) ([TypeAnnotation], a)
+_I32Type = prism' (uncurry I32Type) $ \r ->
+    case r of
+        I32Type t a -> Just (t, a)
+        _           -> Nothing
+
+_I64Type :: Prism' (TypeReference a) ([TypeAnnotation], a)
+_I64Type = prism' (uncurry I64Type) $ \r ->
+    case r of
+        I64Type t a -> Just (t, a)
+        _           -> Nothing
+
+_DoubleType :: Prism' (TypeReference a) ([TypeAnnotation], a)
+_DoubleType = prism' (uncurry DoubleType) $ \r ->
+    case r of
+        DoubleType t a -> Just (t, a)
+        _              -> Nothing
+
+_MapType :: Prism' (TypeReference a) (TypeReference a, TypeReference a, [TypeAnnotation], a)
+_MapType = prism' (\(k, v, t, a) -> MapType k v t a) $ \r ->
+    case r of
+        MapType k v t a -> Just (k, v, t, a)
+        _               -> Nothing
+
+_SetType :: Prism' (TypeReference a) (TypeReference a, [TypeAnnotation], a)
+_SetType = prism' (\(v, t, a) -> SetType v t a) $ \r ->
+    case r of
+        SetType v t a -> Just (v, t, a)
+        _             -> Nothing
+
+_ListType :: Prism' (TypeReference a) (TypeReference a, [TypeAnnotation], a)
+_ListType = prism' (\(v, t, a) -> ListType v t a) $ \r ->
+    case r of
+        ListType v t a -> Just (v, t, a)
+        _              -> Nothing
 
 instance HasSrcAnnot TypeReference where
-    srcAnnot = L.lens getter setter
+    srcAnnot = lens getter setter
       where
         getter (DefinedType _ a) = a
         getter (StringType  _ a) = a
@@ -262,8 +372,7 @@ instance HasSrcAnnot TypeReference where
         setter (ListType  t x _) a = ListType  t x a
 
 class HasValueType t where
-    valueType :: L.Lens' (t a) (TypeReference a)
-
+    valueType :: Lens' (t a) (TypeReference a)
 
 -- | Whether a field is required or optional.
 data FieldRequiredness
@@ -271,7 +380,17 @@ data FieldRequiredness
     | Optional -- ^ The field is @optional@.
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makePrisms ''FieldRequiredness
+_Required :: Prism' FieldRequiredness ()
+_Required = prism' (\() -> Required) $ \r ->
+    case r of
+        Required -> Just ()
+        _        -> Nothing
+
+_Optional :: Prism' FieldRequiredness ()
+_Optional = prism' (\() -> Optional) $ \r ->
+    case r of
+        Optional -> Just ()
+        _        -> Nothing
 
 -- | A field inside a struct, exception, or function parameters list.
 data Field srcAnnot = Field
@@ -300,29 +419,32 @@ data Field srcAnnot = Field
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeLensesFor
-    [ ("fieldIdentifier", "identifier")
-    , ("fieldRequiredness", "requiredness")
-    , ("fieldDefaultValue", "defaultValue")
-    ] ''Field
+identifier :: Lens' (Field a) (Maybe Integer)
+identifier = lens fieldIdentifier (\s a -> s { fieldIdentifier = a })
+
+requiredness :: Lens' (Field a) (Maybe FieldRequiredness)
+requiredness = lens fieldRequiredness (\s a -> s { fieldRequiredness = a })
+
+defaultValue :: Lens' (Field a) (Maybe (ConstValue a))
+defaultValue = lens fieldDefaultValue (\s a -> s { fieldDefaultValue = a })
 
 instance HasName (Field a) where
-    name = $(accessorLens 'fieldName)
+    name = lens fieldName (\s a -> s { fieldName = a })
 
 instance HasValueType Field where
-    valueType = $(accessorLens 'fieldValueType)
+    valueType = lens fieldValueType (\s a -> s { fieldValueType = a })
 
 instance HasSrcAnnot Field where
-    srcAnnot = $(accessorLens 'fieldSrcAnnot)
+    srcAnnot = lens fieldSrcAnnot (\s a -> s { fieldSrcAnnot = a })
 
 instance HasDocstring (Field a) where
-    docstring = $(accessorLens 'fieldDocstring)
+    docstring = lens fieldDocstring (\s a -> s { fieldDocstring = a })
 
 instance HasAnnotations (Field a) where
-    annotations = $(accessorLens 'fieldAnnotations)
+    annotations = lens fieldAnnotations (\s a -> s { fieldAnnotations = a })
 
 class HasFields t where
-    fields :: L.Lens' (t a) [Field a]
+    fields :: Lens' (t a) [Field a]
 
 -- | A function defined inside a service.
 data Function srcAnnot = Function
@@ -345,24 +467,29 @@ data Function srcAnnot = Function
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeLensesFor
-    [ ("functionOneWay", "oneWay")
-    , ("functionReturnType", "returnType")
-    , ("functionParameters", "parameters")
-    , ("functionExceptions", "exceptions")
-    ] ''Function
+oneWay :: Lens' (Function a) Bool
+oneWay = lens functionOneWay (\s a -> s { functionOneWay = a })
+
+returnType :: Lens' (Function a) (Maybe (TypeReference a))
+returnType = lens functionReturnType (\s a -> s { functionReturnType = a })
+
+parameters :: Lens' (Function a) [Field a]
+parameters = lens functionParameters (\s a -> s { functionParameters = a })
+
+exceptions :: Lens' (Function a) (Maybe [Field a])
+exceptions = lens functionExceptions (\s a -> s { functionExceptions = a })
 
 instance HasName (Function a) where
-    name = $(accessorLens 'functionName)
+    name = lens functionName (\s a -> s { functionName = a })
 
 instance HasSrcAnnot Function where
-    srcAnnot = $(accessorLens 'functionSrcAnnot)
+    srcAnnot = lens functionSrcAnnot (\s a -> s { functionSrcAnnot = a })
 
 instance HasDocstring (Function a) where
-    docstring = $(accessorLens 'functionDocstring)
+    docstring = lens functionDocstring (\s a -> s { functionDocstring = a })
 
 instance HasAnnotations (Function a) where
-    annotations = $(accessorLens 'functionAnnotations)
+    annotations = lens functionAnnotations (\s a -> s { functionAnnotations = a })
 
 -- | A service definition.
 --
@@ -384,22 +511,23 @@ data Service srcAnnot = Service
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeLensesFor
-    [ ("serviceExtends", "extends")
-    , ("serviceFunctions", "functions")
-    ] ''Service
+functions :: Lens' (Service a) [Function a]
+functions = lens serviceFunctions (\s a -> s { serviceFunctions = a })
+
+extends :: Lens' (Service a) (Maybe Text)
+extends = lens serviceExtends (\s a -> s { serviceExtends = a })
 
 instance HasName (Service a) where
-    name = $(accessorLens 'serviceName)
+    name = lens serviceName (\s a -> s { serviceName = a })
 
 instance HasSrcAnnot Service where
-    srcAnnot = $(accessorLens 'serviceSrcAnnot)
+    srcAnnot = lens serviceSrcAnnot (\s a -> s { serviceSrcAnnot = a })
 
 instance HasDocstring (Service a) where
-    docstring = $(accessorLens 'serviceDocstring)
+    docstring = lens serviceDocstring (\s a -> s { serviceDocstring = a })
 
 instance HasAnnotations (Service a) where
-    annotations = $(accessorLens 'serviceAnnotations)
+    annotations = lens serviceAnnotations (\s a -> s { serviceAnnotations = a })
 
 -- | A declared constant.
 --
@@ -417,19 +545,20 @@ data Const srcAnnot = Const
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-makeFieldsFor ["constValue"] ''Const
+instance HasValue (Const a) (ConstValue a) where
+    value = lens constValue (\s a -> s { constValue = a })
 
 instance HasName (Const a) where
-    name = $(accessorLens 'constName)
+    name = lens constName (\s a -> s { constName = a })
 
 instance HasSrcAnnot Const where
-    srcAnnot = $(accessorLens 'constSrcAnnot)
+    srcAnnot = lens constSrcAnnot (\s a -> s { constSrcAnnot = a })
 
 instance HasValueType Const where
-    valueType = $(accessorLens 'constValueType)
+    valueType = lens constValueType (\s a -> s { constValueType = a })
 
 instance HasDocstring (Const a) where
-    docstring = $(accessorLens 'constDocstring)
+    docstring = lens constDocstring (\s a -> s { constDocstring = a })
 
 -- | A typedef is just an alias for another type.
 --
@@ -447,19 +576,20 @@ data Typedef srcAnnot = Typedef
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeLensesFor [("typedefTargetType", "targetType")] ''Typedef
+targetType :: Lens' (Typedef a) (TypeReference a)
+targetType = lens typedefTargetType (\s a -> s { typedefTargetType = a })
 
 instance HasName (Typedef a) where
-    name = $(accessorLens 'typedefName)
+    name = lens typedefName (\s a -> s { typedefName = a })
 
 instance HasSrcAnnot Typedef where
-    srcAnnot = $(accessorLens 'typedefSrcAnnot)
+    srcAnnot = lens typedefSrcAnnot (\s a -> s { typedefSrcAnnot = a })
 
 instance HasDocstring (Typedef a) where
-    docstring = $(accessorLens 'typedefDocstring)
+    docstring = lens typedefDocstring (\s a -> s { typedefDocstring = a })
 
 instance HasAnnotations (Typedef a) where
-    annotations = $(accessorLens 'typedefAnnotations)
+    annotations = lens typedefAnnotations (\s a -> s { typedefAnnotations = a })
 
 -- | A named value inside an enum.
 data EnumDef srcAnnot = EnumDef
@@ -475,19 +605,20 @@ data EnumDef srcAnnot = EnumDef
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-makeFieldsFor ["enumDefValue"] ''EnumDef
+instance HasValue (EnumDef a) (Maybe Integer) where
+    value = lens enumDefValue (\s a -> s { enumDefValue = a })
 
 instance HasName (EnumDef a) where
-    name = $(accessorLens 'enumDefName)
+    name = lens enumDefName (\s a -> s { enumDefName = a })
 
 instance HasSrcAnnot EnumDef where
-    srcAnnot = $(accessorLens 'enumDefSrcAnnot)
+    srcAnnot = lens enumDefSrcAnnot (\s a -> s { enumDefSrcAnnot = a })
 
 instance HasDocstring (EnumDef a) where
-    docstring = $(accessorLens 'enumDefDocstring)
+    docstring = lens enumDefDocstring (\s a -> s { enumDefDocstring = a })
 
 instance HasAnnotations (EnumDef a) where
-    annotations = $(accessorLens 'enumDefAnnotations)
+    annotations = lens enumDefAnnotations (\s a -> s { enumDefAnnotations = a })
 
 -- | Enums are sets of named integer values.
 --
@@ -507,19 +638,23 @@ data Enum srcAnnot = Enum
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-makeFieldsFor ["enumValues"] ''Enum
+class HasValues s a | s -> a where
+    values :: Lens' s a
+
+instance HasValues (Enum a) [EnumDef a] where
+    values = lens enumValues (\s a -> s { enumValues = a })
 
 instance HasName (Enum a) where
-    name = $(accessorLens 'enumName)
+    name = lens enumName (\s a -> s { enumName = a })
 
 instance HasSrcAnnot Enum where
-    srcAnnot = $(accessorLens 'enumSrcAnnot)
+    srcAnnot = lens enumSrcAnnot (\s a -> s { enumSrcAnnot = a })
 
 instance HasDocstring (Enum a) where
-    docstring = $(accessorLens 'enumDocstring)
+    docstring = lens enumDocstring (\s a -> s { enumDocstring = a })
 
 instance HasAnnotations (Enum a) where
-    annotations = $(accessorLens 'enumAnnotations)
+    annotations = lens enumAnnotations (\s a -> s { enumAnnotations = a })
 
 -- | A struct definition
 --
@@ -540,19 +675,19 @@ data Struct srcAnnot = Struct
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 instance HasName (Struct a) where
-    name = $(accessorLens 'structName)
+    name = lens structName (\s a -> s { structName = a })
 
 instance HasFields Struct where
-    fields = $(accessorLens 'structFields)
+    fields = lens structFields (\s a -> s { structFields = a })
 
 instance HasSrcAnnot Struct where
-    srcAnnot = $(accessorLens 'structSrcAnnot)
+    srcAnnot = lens structSrcAnnot (\s a -> s { structSrcAnnot = a })
 
 instance HasDocstring (Struct a) where
-    docstring = $(accessorLens 'structDocstring)
+    docstring = lens structDocstring (\s a -> s { structDocstring = a })
 
 instance HasAnnotations (Struct a) where
-    annotations = $(accessorLens 'structAnnotations)
+    annotations = lens structAnnotations (\s a -> s { structAnnotations = a })
 
 -- | A union of other types.
 --
@@ -574,19 +709,19 @@ data Union srcAnnot = Union
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 instance HasName (Union a) where
-    name = $(accessorLens 'unionName)
+    name = lens unionName (\s a -> s { unionName = a })
 
 instance HasFields Union where
-    fields = $(accessorLens 'unionFields)
+    fields = lens unionFields (\s a -> s { unionFields = a })
 
 instance HasSrcAnnot Union where
-    srcAnnot = $(accessorLens 'unionSrcAnnot)
+    srcAnnot = lens unionSrcAnnot (\s a -> s { unionSrcAnnot = a })
 
 instance HasDocstring (Union a) where
-    docstring = $(accessorLens 'unionDocstring)
+    docstring = lens unionDocstring (\s a -> s { unionDocstring = a })
 
 instance HasAnnotations (Union a) where
-    annotations = $(accessorLens 'unionAnnotations)
+    annotations = lens unionAnnotations (\s a -> s { unionAnnotations = a })
 
 -- | Exception types.
 --
@@ -608,19 +743,19 @@ data Exception srcAnnot = Exception
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 instance HasName (Exception a) where
-    name = $(accessorLens 'exceptionName)
+    name = lens exceptionName (\s a -> s { exceptionName = a })
 
 instance HasFields Exception where
-    fields = $(accessorLens 'exceptionFields)
+    fields = lens exceptionFields (\s a -> s { exceptionFields = a })
 
 instance HasSrcAnnot Exception where
-    srcAnnot = $(accessorLens 'exceptionSrcAnnot)
+    srcAnnot = lens exceptionSrcAnnot (\s a -> s { exceptionSrcAnnot = a })
 
 instance HasDocstring (Exception a) where
-    docstring = $(accessorLens 'exceptionDocstring)
+    docstring = lens exceptionDocstring (\s a -> s { exceptionDocstring = a })
 
 instance HasAnnotations (Exception a) where
-    annotations = $(accessorLens 'exceptionAnnotations)
+    annotations = lens exceptionAnnotations (\s a -> s { exceptionAnnotations = a })
 
 -- | An string-only enum. These are a deprecated feature of Thrift and
 -- shouldn't be used.
@@ -635,19 +770,20 @@ data Senum srcAnnot = Senum
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-makeFieldsFor ["senumValues"] ''Senum
+instance HasValues (Senum a) [Text] where
+    values = lens senumValues (\s a -> s { senumValues = a })
 
 instance HasName (Senum a) where
-    name = $(accessorLens 'senumName)
+    name = lens senumName (\s a -> s { senumName = a })
 
 instance HasSrcAnnot Senum where
-    srcAnnot = $(accessorLens 'senumSrcAnnot)
+    srcAnnot = lens senumSrcAnnot (\s a -> s { senumSrcAnnot = a })
 
 instance HasDocstring (Senum a) where
-    docstring = $(accessorLens 'senumDocstring)
+    docstring = lens senumDocstring (\s a -> s { senumDocstring = a })
 
 instance HasAnnotations (Senum a) where
-    annotations = $(accessorLens 'senumAnnotations)
+    annotations = lens senumAnnotations (\s a -> s { senumAnnotations = a })
 
 -- | Defines the various types that can be declared in Thrift.
 data Type srcAnnot
@@ -666,71 +802,71 @@ data Type srcAnnot
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 instance HasName (Type a) where
-    name = L.lens getter setter
+    name = lens getter setter
       where
-        getter (TypedefType   t) = L.view name t
-        getter (EnumType      t) = L.view name t
-        getter (StructType    t) = L.view name t
-        getter (UnionType     t) = L.view name t
-        getter (ExceptionType t) = L.view name t
-        getter (SenumType     t) = L.view name t
+        getter (TypedefType   t) = view name t
+        getter (EnumType      t) = view name t
+        getter (StructType    t) = view name t
+        getter (UnionType     t) = view name t
+        getter (ExceptionType t) = view name t
+        getter (SenumType     t) = view name t
 
-        setter (TypedefType   t) n = TypedefType   $ L.set name n t
-        setter (EnumType      t) n = EnumType      $ L.set name n t
-        setter (StructType    t) n = StructType    $ L.set name n t
-        setter (UnionType     t) n = UnionType     $ L.set name n t
-        setter (ExceptionType t) n = ExceptionType $ L.set name n t
-        setter (SenumType     t) n = SenumType     $ L.set name n t
+        setter (TypedefType   t) n = TypedefType   $ set name n t
+        setter (EnumType      t) n = EnumType      $ set name n t
+        setter (StructType    t) n = StructType    $ set name n t
+        setter (UnionType     t) n = UnionType     $ set name n t
+        setter (ExceptionType t) n = ExceptionType $ set name n t
+        setter (SenumType     t) n = SenumType     $ set name n t
 
 instance HasSrcAnnot Type where
-    srcAnnot = L.lens getter setter
+    srcAnnot = lens getter setter
       where
-        getter (TypedefType   t) = L.view srcAnnot t
-        getter (EnumType      t) = L.view srcAnnot t
-        getter (StructType    t) = L.view srcAnnot t
-        getter (UnionType     t) = L.view srcAnnot t
-        getter (ExceptionType t) = L.view srcAnnot t
-        getter (SenumType     t) = L.view srcAnnot t
+        getter (TypedefType   t) = view srcAnnot t
+        getter (EnumType      t) = view srcAnnot t
+        getter (StructType    t) = view srcAnnot t
+        getter (UnionType     t) = view srcAnnot t
+        getter (ExceptionType t) = view srcAnnot t
+        getter (SenumType     t) = view srcAnnot t
 
-        setter (TypedefType   t) a = TypedefType   $ L.set srcAnnot a t
-        setter (EnumType      t) a = EnumType      $ L.set srcAnnot a t
-        setter (StructType    t) a = StructType    $ L.set srcAnnot a t
-        setter (UnionType     t) a = UnionType     $ L.set srcAnnot a t
-        setter (ExceptionType t) a = ExceptionType $ L.set srcAnnot a t
-        setter (SenumType     t) a = SenumType     $ L.set srcAnnot a t
+        setter (TypedefType   t) a = TypedefType   $ set srcAnnot a t
+        setter (EnumType      t) a = EnumType      $ set srcAnnot a t
+        setter (StructType    t) a = StructType    $ set srcAnnot a t
+        setter (UnionType     t) a = UnionType     $ set srcAnnot a t
+        setter (ExceptionType t) a = ExceptionType $ set srcAnnot a t
+        setter (SenumType     t) a = SenumType     $ set srcAnnot a t
 
-_Typedef :: L.Prism' (Type ann) (Typedef ann)
-_Typedef = L.prism' TypedefType $ \t ->
+_Typedef :: Prism' (Type ann) (Typedef ann)
+_Typedef = prism' TypedefType $ \t ->
     case t of
         TypedefType a -> Just a
         _             -> Nothing
 
-_Enum :: L.Prism' (Type ann) (Enum ann)
-_Enum = L.prism' EnumType $ \t ->
+_Enum :: Prism' (Type ann) (Enum ann)
+_Enum = prism' EnumType $ \t ->
     case t of
         EnumType a -> Just a
         _          -> Nothing
 
-_Struct :: L.Prism' (Type ann) (Struct ann)
-_Struct = L.prism' StructType $ \t ->
+_Struct :: Prism' (Type ann) (Struct ann)
+_Struct = prism' StructType $ \t ->
     case t of
         StructType a -> Just a
         _            -> Nothing
 
-_Union :: L.Prism' (Type ann) (Union ann)
-_Union = L.prism' UnionType $ \t ->
+_Union :: Prism' (Type ann) (Union ann)
+_Union = prism' UnionType $ \t ->
     case t of
         UnionType a -> Just a
         _           -> Nothing
 
-_Exception :: L.Prism' (Type ann) (Exception ann)
-_Exception = L.prism' ExceptionType $ \t ->
+_Exception :: Prism' (Type ann) (Exception ann)
+_Exception = prism' ExceptionType $ \t ->
     case t of
         ExceptionType a -> Just a
         _               -> Nothing
 
-_Senum :: L.Prism' (Type ann) (Senum ann)
-_Senum = L.prism' SenumType $ \t ->
+_Senum :: Prism' (Type ann) (Senum ann)
+_Senum = prism' SenumType $ \t ->
     case t of
         SenumType a -> Just a
         _           -> Nothing
@@ -748,42 +884,42 @@ data Definition srcAnnot
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
 instance HasName (Definition a) where
-    name = L.lens getter setter
+    name = lens getter setter
       where
-        getter (ConstDefinition   d) = L.view name d
-        getter (TypeDefinition    d) = L.view name d
-        getter (ServiceDefinition d) = L.view name d
+        getter (ConstDefinition   d) = view name d
+        getter (TypeDefinition    d) = view name d
+        getter (ServiceDefinition d) = view name d
 
-        setter (ConstDefinition   d) n = ConstDefinition   $ L.set name n d
-        setter (TypeDefinition    d) n = TypeDefinition    $ L.set name n d
-        setter (ServiceDefinition d) n = ServiceDefinition $ L.set name n d
+        setter (ConstDefinition   d) n = ConstDefinition   $ set name n d
+        setter (TypeDefinition    d) n = TypeDefinition    $ set name n d
+        setter (ServiceDefinition d) n = ServiceDefinition $ set name n d
 
 instance HasSrcAnnot Definition where
-    srcAnnot = L.lens getter setter
+    srcAnnot = lens getter setter
       where
-        getter (ConstDefinition   d) = L.view srcAnnot d
-        getter (TypeDefinition    d) = L.view srcAnnot d
-        getter (ServiceDefinition d) = L.view srcAnnot d
+        getter (ConstDefinition   d) = view srcAnnot d
+        getter (TypeDefinition    d) = view srcAnnot d
+        getter (ServiceDefinition d) = view srcAnnot d
 
-        setter (ConstDefinition   d) a = ConstDefinition   $ L.set srcAnnot a d
-        setter (TypeDefinition    d) a = TypeDefinition    $ L.set srcAnnot a d
-        setter (ServiceDefinition d) a = ServiceDefinition $ L.set srcAnnot a d
+        setter (ConstDefinition   d) a = ConstDefinition   $ set srcAnnot a d
+        setter (TypeDefinition    d) a = TypeDefinition    $ set srcAnnot a d
+        setter (ServiceDefinition d) a = ServiceDefinition $ set srcAnnot a d
 
 
-_Const :: L.Prism' (Definition ann) (Const ann)
-_Const = L.prism' ConstDefinition $ \def ->
+_Const :: Prism' (Definition ann) (Const ann)
+_Const = prism' ConstDefinition $ \def ->
     case def of
         ConstDefinition c -> Just c
         _                 -> Nothing
 
-_Type :: L.Prism' (Definition ann) (Type ann)
-_Type = L.prism' TypeDefinition $ \def ->
+_Type :: Prism' (Definition ann) (Type ann)
+_Type = prism' TypeDefinition $ \def ->
     case def of
         TypeDefinition c -> Just c
         _                 -> Nothing
 
-_Service :: L.Prism' (Definition ann) (Service ann)
-_Service = L.prism' ServiceDefinition $ \def ->
+_Service :: Prism' (Definition ann) (Service ann)
+_Service = prism' ServiceDefinition $ \def ->
     case def of
         ServiceDefinition c -> Just c
         _                 -> Nothing
@@ -804,13 +940,14 @@ data Namespace srcAnnot = Namespace
     }
     deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeLensesFor [("namespaceLanguage", "language")] ''Namespace
+language :: Lens' (Namespace a) Text
+language = lens namespaceLanguage (\s a -> s { namespaceLanguage = a })
 
 instance HasName (Namespace a) where
-    name = $(accessorLens 'namespaceName)
+    name = lens namespaceName (\s a -> s { namespaceName = a })
 
 instance HasSrcAnnot Namespace where
-    srcAnnot = $(accessorLens 'namespaceSrcAnnot)
+    srcAnnot = lens namespaceSrcAnnot (\s a -> s { namespaceSrcAnnot = a })
 
 -- | The IDL includes another Thrift file.
 --
@@ -825,10 +962,11 @@ data Include srcAnnot = Include
     }
     deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeLensesFor [("includePath", "path")] ''Include
+path :: Lens' (Include a) Text
+path = lens includePath (\s a -> s { includePath = a })
 
 instance HasSrcAnnot Include where
-    srcAnnot = $(accessorLens 'includeSrcAnnot)
+    srcAnnot = lens includeSrcAnnot (\s a -> s { includeSrcAnnot = a })
 
 -- | Headers for a program.
 data Header srcAnnot
@@ -838,14 +976,14 @@ data Header srcAnnot
       HeaderNamespace (Namespace srcAnnot)
     deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-_Include :: L.Prism' (Header ann) (Include ann)
-_Include = L.prism' HeaderInclude $ \h ->
+_Include :: Prism' (Header ann) (Include ann)
+_Include = prism' HeaderInclude $ \h ->
     case h of
         HeaderInclude inc -> Just inc
         _                 -> Nothing
 
-_Namespace :: L.Prism' (Header ann) (Namespace ann)
-_Namespace = L.prism' HeaderNamespace $ \h ->
+_Namespace :: Prism' (Header ann) (Namespace ann)
+_Namespace = prism' HeaderNamespace $ \h ->
     case h of
         HeaderNamespace ns -> Just ns
         _                  -> Nothing
@@ -860,7 +998,8 @@ data Program srcAnnot = Program
     }
     deriving (Show, Ord, Eq, Data, Typeable, Generic)
 
-L.makeLensesFor
-    [ ("programHeaders", "headers")
-    , ("programDefinitions", "definitions")
-    ] ''Program
+headers :: Lens' (Program a) [Header a]
+headers = lens programHeaders (\s a -> s { programHeaders = a })
+
+definitions :: Lens' (Program a) [Definition a]
+definitions = lens programDefinitions (\s a -> s { programDefinitions = a })

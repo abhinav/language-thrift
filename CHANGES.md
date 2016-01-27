@@ -1,3 +1,8 @@
+0.7.0.1
+=======
+
+-   Drop use of `TemplateHaskell`.
+
 0.7.0.0
 =======
 
