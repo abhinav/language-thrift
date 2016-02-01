@@ -62,11 +62,9 @@ module Language.Thrift.Parser
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.State (StateT)
-import Data.Set                  (Set)
 import Data.Text                 (Text)
 
 import qualified Control.Monad.Trans.State as State
-import qualified Data.Set                  as Set
 import qualified Data.Text                 as Text
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Lexer     as PL
@@ -77,7 +75,6 @@ import qualified Language.Thrift.Types as T
 -- attach it to entities.
 data State = State
     { stateDocstring :: T.Docstring
-    , stateReserved  :: Set Text
     }
     deriving (Show, Eq)
 
@@ -87,7 +84,7 @@ type Parser s = StateT State (P.Parsec s)
 -- | Evaluates the underlying parser with a default state and get the Megaparsec
 -- parser.
 runParser :: Parser s a -> P.Parsec s a
-runParser p = State.evalStateT p (State Nothing Set.empty)
+runParser p = State.evalStateT p (State Nothing)
 
 -- | Parses the Thrift file at the given path.
 parseFromFile :: FilePath -> IO (Either P.ParseError (T.Program P.SourcePos))
@@ -197,24 +194,12 @@ semi   = symbolic ';'
 colon  = symbolic ':'
 equals = symbolic '='
 
-
--- | Fails the parser if the given identifier is reserved.
-ensureNotReserved :: P.Stream s Char => Text -> Parser s ()
-ensureNotReserved t = do
-    rs <- State.gets stateReserved
-    when (t `Set.member` rs) $
-        P.unexpected ("reserved identifier " ++ show t)
-
-
 -- | Parses a reserved identifier and adds it to the collection of known
 -- reserved keywords.
 reserved :: P.Stream s Char => String -> Parser s ()
-reserved name = P.label name $ token $ do
-    State.modify' $ \s@State{stateReserved = rs} ->
-        s { stateReserved = Set.insert (Text.pack name) rs }
-    P.try $ do
-        void (P.string name)
-        P.notFollowedBy (P.alphaNumChar <|> P.oneOf "_.")
+reserved name = P.label name $ token $ P.try $ do
+    void (P.string name)
+    P.notFollowedBy (P.alphaNumChar <|> P.oneOf "_.")
 
 
 text :: P.Stream s Char => Text -> Parser s Text
@@ -238,12 +223,10 @@ integer = token PL.integer
 -- | An identifier in a Thrift file.
 identifier :: P.Stream s Char => Parser s Text
 identifier = P.label "identifier" $ token $ do
-    name' <- (:)
+    name <- (:)
         <$> (P.letterChar <|> P.char '_')
         <*> many (P.alphaNumChar <|> P.oneOf "_.")
-    let name = Text.pack name'
-    ensureNotReserved name
-    return name
+    return (Text.pack name)
 
 
 -- | Top-level parser to parse complete Thrift documents.
