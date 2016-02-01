@@ -30,7 +30,6 @@ library
         base >=4.7 && <4.9,
         ansi-wl-pprint >=0.6 && <0.7,
         containers >=0.5,
-        lens >=4.0 && <5.0,
         megaparsec >=4.0 && <5.0,
         text >=1.2,
         transformers -any

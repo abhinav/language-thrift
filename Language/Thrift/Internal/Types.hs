@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE RankNTypes             #-}
 module Language.Thrift.Internal.Types
     (
     -- * AST
@@ -13,8 +14,6 @@ module Language.Thrift.Internal.Types
     , definitions
 
     , Header(..)
-    , _Include
-    , _Namespace
 
     , Include(..)
     , path
@@ -23,9 +22,6 @@ module Language.Thrift.Internal.Types
     , language
 
     , Definition(..)
-    , _Const
-    , _Service
-    , _Type
 
     , Const(..)
     , Service(..)
@@ -33,12 +29,6 @@ module Language.Thrift.Internal.Types
     , extends
 
     , Type(..)
-    , _Typedef
-    , _Enum
-    , _Struct
-    , _Union
-    , _Exception
-    , _Senum
 
     , Typedef(..)
     , targetType
@@ -50,8 +40,6 @@ module Language.Thrift.Internal.Types
     , Senum(..)
 
     , FieldRequiredness(..)
-    , _Required
-    , _Optional
 
     , Field(..)
     , identifier
@@ -61,27 +49,8 @@ module Language.Thrift.Internal.Types
     , EnumDef(..)
 
     , ConstValue(..)
-    , _ConstInt
-    , _ConstFloat
-    , _ConstLiteral
-    , _ConstIdentifier
-    , _ConstList
-    , _ConstMap
 
     , TypeReference(..)
-    , _DefinedType
-    , _StringType
-    , _BinaryType
-    , _SListType
-    , _BoolType
-    , _ByteType
-    , _I16Type
-    , _I32Type
-    , _I64Type
-    , _DoubleType
-    , _MapType
-    , _SetType
-    , _ListType
 
     , Function(..)
     , oneWay
@@ -104,20 +73,33 @@ module Language.Thrift.Internal.Types
     , HasValueType(..)
     ) where
 
-import Control.Lens (Lens', Prism', lens, prism', set, view)
-import Data.Data    (Data, Typeable)
-import Data.Text    (Text)
-import GHC.Generics (Generic)
-import Prelude      hiding (Enum)
+import Data.Data             (Data, Typeable)
+import Data.Functor.Identity (Identity (..))
+import Data.Text             (Text)
+import GHC.Generics          (Generic)
+import Prelude               hiding (Enum)
+
+import qualified Control.Applicative as A
+
+type Lens s a = forall f. Functor f => (a -> f a) -> s -> f s
+
+lens :: (s -> a) -> (s -> a -> s) -> Lens s a
+lens getter setter f s = setter s `fmap` f (getter s)
+
+set :: Lens s a -> a -> s -> s
+set l a = runIdentity . l (\_ -> Identity a)
+
+view :: Lens s a -> s -> a
+view l = A.getConst . l A.Const
 
 class HasSrcAnnot t where
-    srcAnnot :: Lens' (t a) a
+    srcAnnot :: Lens (t a) a
 
 class HasName t where
-    name :: Lens' t Text
+    name :: Lens t Text
 
 class HasValue s a | s -> a where
-    value :: Lens' s a
+    value :: Lens s a
 
 -- | Type annoations may be added in various places in the form,
 --
@@ -140,7 +122,7 @@ instance HasValue TypeAnnotation (Maybe Text) where
     value = lens typeAnnotationValue (\s a -> s { typeAnnotationValue = a })
 
 class HasAnnotations t where
-    annotations :: Lens' t [TypeAnnotation]
+    annotations :: Lens t [TypeAnnotation]
 
 -- | Docstrings are Javadoc-style comments attached various defined objects.
 --
@@ -151,7 +133,7 @@ class HasAnnotations t where
 type Docstring = Maybe Text
 
 class HasDocstring t where
-    docstring :: Lens' t Docstring
+    docstring :: Lens t Docstring
 
 -- | A constant literal value in the IDL. Only a few basic types, lists, and
 -- maps can be presented in Thrift files as literals.
@@ -172,42 +154,6 @@ data ConstValue srcAnnot
     -- ^ A literal list containing other constant values.
     -- @{"hellO": 1, "world": 2}@
   deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
-
-_ConstInt :: Prism' (ConstValue a) (Integer, a)
-_ConstInt = prism' (uncurry ConstInt) $ \c ->
-    case c of
-        ConstInt v a -> Just (v, a)
-        _            -> Nothing
-
-_ConstFloat :: Prism' (ConstValue a) (Double, a)
-_ConstFloat = prism' (uncurry ConstFloat) $ \c ->
-    case c of
-        ConstFloat v a -> Just (v, a)
-        _              -> Nothing
-
-_ConstLiteral :: Prism' (ConstValue a) (Text, a)
-_ConstLiteral = prism' (uncurry ConstLiteral) $ \c ->
-    case c of
-        ConstLiteral v a -> Just (v, a)
-        _                -> Nothing
-
-_ConstIdentifier :: Prism' (ConstValue a) (Text, a)
-_ConstIdentifier = prism' (uncurry ConstIdentifier) $ \c ->
-    case c of
-        ConstIdentifier v a -> Just (v, a)
-        _                   -> Nothing
-
-_ConstList :: Prism' (ConstValue a) ([ConstValue a], a)
-_ConstList = prism' (uncurry ConstList) $ \c ->
-    case c of
-        ConstList v a -> Just (v, a)
-        _             -> Nothing
-
-_ConstMap :: Prism' (ConstValue a) ([(ConstValue a, ConstValue a)], a)
-_ConstMap = prism' (uncurry ConstMap) $ \c ->
-    case c of
-        ConstMap v a -> Just (v, a)
-        _            -> Nothing
 
 instance HasSrcAnnot ConstValue where
     srcAnnot = lens getter setter
@@ -263,84 +209,6 @@ data TypeReference srcAnnot
     -- ^ @list\<qux\>@ and annotations.
   deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
-_DefinedType :: Prism' (TypeReference a) (Text, a)
-_DefinedType = prism' (uncurry DefinedType) $ \r ->
-    case r of
-        DefinedType t a -> Just (t, a)
-        _               -> Nothing
-
-_StringType :: Prism' (TypeReference a) ([TypeAnnotation], a)
-_StringType = prism' (uncurry StringType) $ \r ->
-    case r of
-        StringType t a -> Just (t, a)
-        _              -> Nothing
-
-_BinaryType :: Prism' (TypeReference a) ([TypeAnnotation], a)
-_BinaryType = prism' (uncurry BinaryType) $ \r ->
-    case r of
-        BinaryType t a -> Just (t, a)
-        _              -> Nothing
-
-_SListType :: Prism' (TypeReference a) ([TypeAnnotation], a)
-_SListType = prism' (uncurry SListType) $ \r ->
-    case r of
-        SListType t a -> Just (t, a)
-        _             -> Nothing
-
-_BoolType :: Prism' (TypeReference a) ([TypeAnnotation], a)
-_BoolType = prism' (uncurry BoolType) $ \r ->
-    case r of
-        BoolType t a -> Just (t, a)
-        _            -> Nothing
-
-_ByteType :: Prism' (TypeReference a) ([TypeAnnotation], a)
-_ByteType = prism' (uncurry ByteType) $ \r ->
-    case r of
-        ByteType t a -> Just (t, a)
-        _            -> Nothing
-
-_I16Type :: Prism' (TypeReference a) ([TypeAnnotation], a)
-_I16Type = prism' (uncurry I16Type) $ \r ->
-    case r of
-        I16Type t a -> Just (t, a)
-        _           -> Nothing
-
-_I32Type :: Prism' (TypeReference a) ([TypeAnnotation], a)
-_I32Type = prism' (uncurry I32Type) $ \r ->
-    case r of
-        I32Type t a -> Just (t, a)
-        _           -> Nothing
-
-_I64Type :: Prism' (TypeReference a) ([TypeAnnotation], a)
-_I64Type = prism' (uncurry I64Type) $ \r ->
-    case r of
-        I64Type t a -> Just (t, a)
-        _           -> Nothing
-
-_DoubleType :: Prism' (TypeReference a) ([TypeAnnotation], a)
-_DoubleType = prism' (uncurry DoubleType) $ \r ->
-    case r of
-        DoubleType t a -> Just (t, a)
-        _              -> Nothing
-
-_MapType :: Prism' (TypeReference a) (TypeReference a, TypeReference a, [TypeAnnotation], a)
-_MapType = prism' (\(k, v, t, a) -> MapType k v t a) $ \r ->
-    case r of
-        MapType k v t a -> Just (k, v, t, a)
-        _               -> Nothing
-
-_SetType :: Prism' (TypeReference a) (TypeReference a, [TypeAnnotation], a)
-_SetType = prism' (\(v, t, a) -> SetType v t a) $ \r ->
-    case r of
-        SetType v t a -> Just (v, t, a)
-        _             -> Nothing
-
-_ListType :: Prism' (TypeReference a) (TypeReference a, [TypeAnnotation], a)
-_ListType = prism' (\(v, t, a) -> ListType v t a) $ \r ->
-    case r of
-        ListType v t a -> Just (v, t, a)
-        _              -> Nothing
-
 instance HasSrcAnnot TypeReference where
     srcAnnot = lens getter setter
       where
@@ -373,25 +241,13 @@ instance HasSrcAnnot TypeReference where
         setter (ListType  t x _) a = ListType  t x a
 
 class HasValueType t where
-    valueType :: Lens' (t a) (TypeReference a)
+    valueType :: Lens (t a) (TypeReference a)
 
 -- | Whether a field is required or optional.
 data FieldRequiredness
     = Required -- ^ The field is @required@.
     | Optional -- ^ The field is @optional@.
   deriving (Show, Ord, Eq, Data, Typeable, Generic)
-
-_Required :: Prism' FieldRequiredness ()
-_Required = prism' (\() -> Required) $ \r ->
-    case r of
-        Required -> Just ()
-        _        -> Nothing
-
-_Optional :: Prism' FieldRequiredness ()
-_Optional = prism' (\() -> Optional) $ \r ->
-    case r of
-        Optional -> Just ()
-        _        -> Nothing
 
 -- | A field inside a struct, exception, or function parameters list.
 data Field srcAnnot = Field
@@ -420,13 +276,13 @@ data Field srcAnnot = Field
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
-identifier :: Lens' (Field a) (Maybe Integer)
+identifier :: Lens (Field a) (Maybe Integer)
 identifier = lens fieldIdentifier (\s a -> s { fieldIdentifier = a })
 
-requiredness :: Lens' (Field a) (Maybe FieldRequiredness)
+requiredness :: Lens (Field a) (Maybe FieldRequiredness)
 requiredness = lens fieldRequiredness (\s a -> s { fieldRequiredness = a })
 
-defaultValue :: Lens' (Field a) (Maybe (ConstValue a))
+defaultValue :: Lens (Field a) (Maybe (ConstValue a))
 defaultValue = lens fieldDefaultValue (\s a -> s { fieldDefaultValue = a })
 
 instance HasName (Field a) where
@@ -445,7 +301,7 @@ instance HasAnnotations (Field a) where
     annotations = lens fieldAnnotations (\s a -> s { fieldAnnotations = a })
 
 class HasFields t where
-    fields :: Lens' (t a) [Field a]
+    fields :: Lens (t a) [Field a]
 
 -- | A function defined inside a service.
 data Function srcAnnot = Function
@@ -468,16 +324,16 @@ data Function srcAnnot = Function
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
-oneWay :: Lens' (Function a) Bool
+oneWay :: Lens (Function a) Bool
 oneWay = lens functionOneWay (\s a -> s { functionOneWay = a })
 
-returnType :: Lens' (Function a) (Maybe (TypeReference a))
+returnType :: Lens (Function a) (Maybe (TypeReference a))
 returnType = lens functionReturnType (\s a -> s { functionReturnType = a })
 
-parameters :: Lens' (Function a) [Field a]
+parameters :: Lens (Function a) [Field a]
 parameters = lens functionParameters (\s a -> s { functionParameters = a })
 
-exceptions :: Lens' (Function a) (Maybe [Field a])
+exceptions :: Lens (Function a) (Maybe [Field a])
 exceptions = lens functionExceptions (\s a -> s { functionExceptions = a })
 
 instance HasName (Function a) where
@@ -512,10 +368,10 @@ data Service srcAnnot = Service
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
-functions :: Lens' (Service a) [Function a]
+functions :: Lens (Service a) [Function a]
 functions = lens serviceFunctions (\s a -> s { serviceFunctions = a })
 
-extends :: Lens' (Service a) (Maybe Text)
+extends :: Lens (Service a) (Maybe Text)
 extends = lens serviceExtends (\s a -> s { serviceExtends = a })
 
 instance HasName (Service a) where
@@ -577,7 +433,7 @@ data Typedef srcAnnot = Typedef
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
-targetType :: Lens' (Typedef a) (TypeReference a)
+targetType :: Lens (Typedef a) (TypeReference a)
 targetType = lens typedefTargetType (\s a -> s { typedefTargetType = a })
 
 instance HasName (Typedef a) where
@@ -640,7 +496,7 @@ data Enum srcAnnot = Enum
   deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 class HasValues s a | s -> a where
-    values :: Lens' s a
+    values :: Lens s a
 
 instance HasValues (Enum a) [EnumDef a] where
     values = lens enumValues (\s a -> s { enumValues = a })
@@ -836,43 +692,6 @@ instance HasSrcAnnot Type where
         setter (ExceptionType t) a = ExceptionType $ set srcAnnot a t
         setter (SenumType     t) a = SenumType     $ set srcAnnot a t
 
-_Typedef :: Prism' (Type ann) (Typedef ann)
-_Typedef = prism' TypedefType $ \t ->
-    case t of
-        TypedefType a -> Just a
-        _             -> Nothing
-
-_Enum :: Prism' (Type ann) (Enum ann)
-_Enum = prism' EnumType $ \t ->
-    case t of
-        EnumType a -> Just a
-        _          -> Nothing
-
-_Struct :: Prism' (Type ann) (Struct ann)
-_Struct = prism' StructType $ \t ->
-    case t of
-        StructType a -> Just a
-        _            -> Nothing
-
-_Union :: Prism' (Type ann) (Union ann)
-_Union = prism' UnionType $ \t ->
-    case t of
-        UnionType a -> Just a
-        _           -> Nothing
-
-_Exception :: Prism' (Type ann) (Exception ann)
-_Exception = prism' ExceptionType $ \t ->
-    case t of
-        ExceptionType a -> Just a
-        _               -> Nothing
-
-_Senum :: Prism' (Type ann) (Senum ann)
-_Senum = prism' SenumType $ \t ->
-    case t of
-        SenumType a -> Just a
-        _           -> Nothing
-
-
 -- | A definition either consists of new constants, new types, or new
 -- services.
 data Definition srcAnnot
@@ -907,25 +726,6 @@ instance HasSrcAnnot Definition where
         setter (ServiceDefinition d) a = ServiceDefinition $ set srcAnnot a d
 
 
-_Const :: Prism' (Definition ann) (Const ann)
-_Const = prism' ConstDefinition $ \def ->
-    case def of
-        ConstDefinition c -> Just c
-        _                 -> Nothing
-
-_Type :: Prism' (Definition ann) (Type ann)
-_Type = prism' TypeDefinition $ \def ->
-    case def of
-        TypeDefinition c -> Just c
-        _                 -> Nothing
-
-_Service :: Prism' (Definition ann) (Service ann)
-_Service = prism' ServiceDefinition $ \def ->
-    case def of
-        ServiceDefinition c -> Just c
-        _                 -> Nothing
-
-
 -- | Namespace directives allows control of the namespace or package
 -- name used by the generated code for certain languages.
 --
@@ -941,7 +741,7 @@ data Namespace srcAnnot = Namespace
     }
     deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
-language :: Lens' (Namespace a) Text
+language :: Lens (Namespace a) Text
 language = lens namespaceLanguage (\s a -> s { namespaceLanguage = a })
 
 instance HasName (Namespace a) where
@@ -963,7 +763,7 @@ data Include srcAnnot = Include
     }
     deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
-path :: Lens' (Include a) Text
+path :: Lens (Include a) Text
 path = lens includePath (\s a -> s { includePath = a })
 
 instance HasSrcAnnot Include where
@@ -977,19 +777,6 @@ data Header srcAnnot
       HeaderNamespace (Namespace srcAnnot)
     deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
-_Include :: Prism' (Header ann) (Include ann)
-_Include = prism' HeaderInclude $ \h ->
-    case h of
-        HeaderInclude inc -> Just inc
-        _                 -> Nothing
-
-_Namespace :: Prism' (Header ann) (Namespace ann)
-_Namespace = prism' HeaderNamespace $ \h ->
-    case h of
-        HeaderNamespace ns -> Just ns
-        _                  -> Nothing
-
-
 -- | A program represents a single Thrift document.
 data Program srcAnnot = Program
     { programHeaders     :: [Header srcAnnot]
@@ -999,8 +786,8 @@ data Program srcAnnot = Program
     }
     deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
-headers :: Lens' (Program a) [Header a]
+headers :: Lens (Program a) [Header a]
 headers = lens programHeaders (\s a -> s { programHeaders = a })
 
-definitions :: Lens' (Program a) [Definition a]
+definitions :: Lens (Program a) [Definition a]
 definitions = lens programDefinitions (\s a -> s { programDefinitions = a })

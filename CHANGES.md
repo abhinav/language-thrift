@@ -1,9 +1,15 @@
 0.8.0.0
 =======
 
--   Switch parser to `megaparsec`. This significantly reduces the number of
-    transitive dependencies for this package.
+This release contains significant breaking changes and cuts the number of
+transitive dependencies down significantly.
+
+-   Switched parser to `megaparsec`. `trifecta` and `parsers` bring too many
+    dependencies with them.
 -   Drop support for `wl-pprint`. Only `ansi-wl-pprint` is supported now.
+-   Drop dependency on `lens`. Lenses for fields of the AST elements are still
+    provided but prisms are not. Use `Control.Lens.makePrisms` to derive your
+    own if needed.
 
 0.7.0.1
 =======
