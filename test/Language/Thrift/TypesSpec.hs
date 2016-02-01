@@ -74,10 +74,10 @@ roundtrip
     -> n ()
     -> IO ()
 roundtrip printer ansiPrinter parser value = do
-    assertParses (void <$> parser) value
+    assertParses (void `fmap` parser) value
         (show $ printer (PP.Config 4) value)
 
     -- For the ANSI pretty printer, we need to discard the color information
     -- for the document to be parseable.
-    assertParses (void <$> parser) value
+    assertParses (void `fmap` parser) value
         (show . PPA.plain $ ansiPrinter (PPA.Config 4) value)

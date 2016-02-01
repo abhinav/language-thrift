@@ -1,33 +1,44 @@
 sudo: false
 language: c
 
-addons: {apt: {sources: [hvr-ghc]}}
-
 cache:
   apt: true
-  directories:
-      - ~/.stack
 
 matrix:
-    include:
-        - env: GHCVER=7.8.4 RESOLVER=lts-2
-          addons: {apt: {packages: [ghc-7.8.4], sources: [hvr-ghc]}}
-        - env: GHCVER=7.10.2 RESOLVER=lts-3
-          addons: {apt: {packages: [ghc-7.10.2], sources: [hvr-ghc]}}
-        - env: GHCVER=7.10.3 RESOLVER=lts-5
-          addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
+  include:
+    - env: CABALVER=1.18 GHCVER=7.8.4
+      addons: {apt: {packages: [cabal-install-1.18,ghc-7.8.4], sources: [hvr-ghc]}}
+    - env: CABALVER=1.22 GHCVER=7.10.1
+      addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.1],sources: [hvr-ghc]}}
+    - env: CABALVER=1.22 GHCVER=7.10.2
+      addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.2],sources: [hvr-ghc]}}
+    - env: CABALVER=1.22 GHCVER=7.10.3
+      addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.3],sources: [hvr-ghc]}}
 
 before_install:
-    - export PATH=$HOME/.local/bin:/opt/ghc/$GHCVER/bin:$PATH
-    - mkdir -p ~/.local/bin
-    - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-    - ghc --version
-    - stack --version
+  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
 
 install:
-    - ./scripts/travis_long stack --resolver $RESOLVER --no-terminal --skip-ghc-check setup
-    - ./scripts/travis_long stack --resolver $RESOLVER --no-terminal --skip-ghc-check test --only-snapshot
+ - cabal --version
+ - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
+ - travis_retry cabal update
+ - cabal install --only-dependencies --enable-tests
 
 script:
-    - stack --resolver $RESOLVER --no-terminal --skip-ghc-check test
-    - cd examples && ../scripts/travis_long stack --resolver $RESOLVER --no-terminal --skip-ghc-check build
+ - cabal configure --enable-tests
+ - cabal build
+ - cabal test --show-details=always
+
+ # Verify that the sdist builds.
+ - cabal sdist
+ - SRC_TGZ=$(cabal info . | awk '{print $2;exit}').tar.gz &&
+   (cd dist && cabal install --force-reinstalls "$SRC_TGZ")
+
+ # Ensure that the examples build
+ - pushd examples
+ - cabal configure
+ - cabal build
+ - popd
+
+notifications:
+    email: false
