@@ -3,6 +3,7 @@
 
 -   Switch parser to `megaparsec`. This significantly reduces the number of
     transitive dependencies for this package.
+-   Drop support for `wl-pprint`. Only `ansi-wl-pprint` is supported now.
 
 0.7.0.1
 =======

@@ -20,9 +20,9 @@ import Data.Text   (Text, unpack)
 import System.Exit (exitFailure)
 import System.IO   (hPrint, hPutStrLn, stderr, stdout)
 
-import qualified Data.Text                    as Text
-import qualified Text.PrettyPrint.ANSI.Leijen as AnsiPP
-import           Text.PrettyPrint.Leijen      hiding (list, tupled)
+import Text.PrettyPrint.ANSI.Leijen hiding (list, tupled)
+
+import qualified Data.Text as Text
 
 import Language.Thrift.Parser (parse)
 

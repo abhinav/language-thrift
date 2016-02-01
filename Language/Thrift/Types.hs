@@ -19,4 +19,3 @@ module Language.Thrift.Types
 
 import Language.Thrift.Internal.Types
 import Language.Thrift.Pretty         ()
-import Language.Thrift.Pretty.ANSI    ()

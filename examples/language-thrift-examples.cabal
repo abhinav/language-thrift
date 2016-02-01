@@ -12,7 +12,6 @@ executable reformatIDL
         base >=4.7 && <4.9,
         language-thrift -any,
         ansi-wl-pprint -any,
-        wl-pprint -any
     default-language: Haskell2010
 
 executable generateHaskellTypes
@@ -22,6 +21,5 @@ executable generateHaskellTypes
         language-thrift -any,
         ansi-wl-pprint -any,
         text -any,
-        wl-pprint -any
     default-language: Haskell2010
 
