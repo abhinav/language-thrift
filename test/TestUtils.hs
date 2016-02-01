@@ -7,38 +7,34 @@ module TestUtils
 
 import Test.Hspec (expectationFailure, shouldBe)
 
-import qualified Text.Trifecta       as T
-import qualified Text.Trifecta.Delta as T
+import qualified Language.Thrift.Parser as T
+import qualified Text.Megaparsec        as P
 
-import qualified Language.Thrift.Parser as P
+type Parser = T.Parser String
 
-type Parser a = P.ThriftParser T.Parser () a
-
-parse :: Parser a -> String -> T.Result a
-parse parser = T.parseString trifectaParser (T.Directed "memory" 0 0 0 0)
-  where
-    trifectaParser = P.runThriftParser (return ()) parser
+parse :: Parser a -> String -> Either P.ParseError a
+parse parser = P.parse (T.runParser parser) "memory"
 
 -- | @assertParses parser expected input@ will assert that running @parser@ on
 -- @input@ will produce @expected@.
 assertParses :: (Show a, Eq a) => Parser a -> a -> String -> IO ()
 assertParses parser expected input =
     case parse parser input of
-        T.Success got -> got `shouldBe` expected
-        T.Failure msg -> expectationFailure $
+        Right got -> got `shouldBe` expected
+        Left err -> expectationFailure $
             "failed to parse:\n" ++ indent 8 input ++
             "\n\texpected: " ++ show expected ++
-            "\n\tgot (error): " ++ show msg
+            "\n\tgot (error): " ++ show err
 
 -- | @parser `shouldNotParse` input@ will assert that running @parser@ on
 -- @input@ will fail.
 shouldNotParse :: Show a => Parser a -> String -> IO ()
 shouldNotParse parser input =
     case parse parser input of
-        T.Success result -> expectationFailure $
+        Right result -> expectationFailure $
             "expected parse failure for\n" ++ indent 8 input ++
             "\n\tgot success: " ++ show result
-        T.Failure _ -> return ()
+        Left _ -> return ()
 
 
 -- | Indent all lines in the string the given number of spaces.

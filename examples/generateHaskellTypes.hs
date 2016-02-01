@@ -18,25 +18,18 @@ import Data.Char   (toLower, toUpper)
 import Data.Maybe  (isNothing)
 import Data.Text   (Text, unpack)
 import System.Exit (exitFailure)
-import System.IO   (stderr, stdout)
+import System.IO   (hPrint, hPutStrLn, stderr, stdout)
 
 import qualified Data.Text                    as Text
 import qualified Text.PrettyPrint.ANSI.Leijen as AnsiPP
 import           Text.PrettyPrint.Leijen      hiding (list, tupled)
-import           Text.Trifecta                (Result (..), parseString)
-import           Text.Trifecta.Delta          (Delta (Directed))
 
-import Language.Thrift.Parser.Trifecta (thriftIDL)
+import Language.Thrift.Parser (parse)
 
 import qualified Language.Thrift.Types as T
 
 die :: String -> IO a
-die s = putStrLn s >> exitFailure
-
--- | '<$>' with the arguments flipped.
-(<&>) :: Functor f => f a -> (a -> b) -> f b
-(<&>) = flip fmap
-infixl 1 <&>
+die s = hPutStrLn stderr s >> exitFailure
 
 ($$) :: T.Docstring -> Doc -> Doc
 ($$) Nothing y = y
@@ -262,9 +255,9 @@ transformIndex f i s = Text.concat [
 
 main :: IO ()
 main = do
-    result <- getContents <&> parseString thriftIDL (Directed "stdin" 0 0 0 0)
+    result <- parse "stdin" `fmap` getContents
     case result of
-        Success p -> generateOutput p
-        Failure doc -> do
-            AnsiPP.displayIO stderr $ AnsiPP.renderPretty 0.8 80 doc
+        Right p -> generateOutput p
+        Left err -> do
+            hPrint stderr err
             die "Parse Failed"

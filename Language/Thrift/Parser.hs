@@ -1,6 +1,7 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 -- |
 -- Module      :  Language.Thrift.Parser
 -- Copyright   :  (c) Abhinav Gupta 2015
@@ -24,7 +25,9 @@
 -- for example, you could define a string value for an int constant.
 --
 module Language.Thrift.Parser
-    ( thriftIDL
+    ( parseFromFile
+    , parse
+    , thriftIDL
 
     -- * Components
 
@@ -51,178 +54,213 @@ module Language.Thrift.Parser
 
     -- * Parser
 
-    , ThriftParser
-    , runThriftParser
+    , Parser
+    , runParser
+    , whiteSpace
     ) where
 
 import Control.Applicative
 import Control.Monad
-import Control.Monad.Trans.Class  (lift)
-import Control.Monad.Trans.Reader (ReaderT)
-import Control.Monad.Trans.State  (StateT)
-import Data.Text                  (Text)
-import Text.Parser.Char
-import Text.Parser.Combinators
-import Text.Parser.Token
-import Text.Parser.Token.Style    (emptyIdents)
+import Control.Monad.Trans.State (StateT)
+import Data.Set                  (Set)
+import Data.Text                 (Text)
 
-import qualified Control.Monad.Trans.Reader as Reader
-import qualified Control.Monad.Trans.State  as State
-import qualified Data.Text                  as Text
+import qualified Control.Monad.Trans.State as State
+import qualified Data.Set                  as Set
+import qualified Data.Text                 as Text
+import qualified Text.Megaparsec           as P
+import qualified Text.Megaparsec.Lexer     as PL
 
 import qualified Language.Thrift.Types as T
 
-
--- | Get a top level parser that is able to parse full Thrift documents.
---
--- Entities defined in the IDL are annotated with @n@ values (determined by
--- executing @p n@ before the parser for the entity is executed).
---
--- Usage with Trifecta to get entities tagged with location information (see
--- also, 'Language.Thrift.Parser.Trifecta.thriftIDL'):
---
--- > Trifecta.parseFromFile (thriftIDL Trifecta.position) "service.thrift"
---
--- Usage with Attoparsec without any annotations:
---
--- > Attoparsec.parse (thriftIDL (return ())) document
---
-thriftIDL :: (MonadPlus p, TokenParsing p) => p n -> p (T.Program n)
-thriftIDL getAnnot = runThriftParser getAnnot program
-
-
 -- | Keeps track of the last docstring seen by the system so that we can
 -- attach it to entities.
-newtype ParserState = ParserState
-  { parserLastDocstring :: T.Docstring
-  } deriving (Show, Ord, Eq)
+data State = State
+    { stateDocstring :: T.Docstring
+    , stateReserved  :: Set Text
+    }
+    deriving (Show, Eq)
 
--- | The ThriftParser wraps another parser @p@ with some extra state. It also
--- allows injecting a configurable action @(p n)@ which produces annotations
--- that will be attached to entities in the Thrift file. See 'thriftIDLParser'
--- for an example.
-newtype ThriftParser p n a =
-        ThriftParser (StateT ParserState (ReaderT (p n) p) a)
-    deriving
-      ( Functor
-      , Applicative
-      , Alternative
-      , Monad
-      , MonadPlus
-      , Parsing
-      , CharParsing
-      )
+-- | Underlying Parser type.
+type Parser s = StateT State (P.Parsec s)
+
+-- | Evaluates the underlying parser with a default state and get the Megaparsec
+-- parser.
+runParser :: Parser s a -> P.Parsec s a
+runParser p = State.evalStateT p (State Nothing Set.empty)
+
+-- | Parses the Thrift file at the given path.
+parseFromFile :: FilePath -> IO (Either P.ParseError (T.Program P.SourcePos))
+parseFromFile =
+    P.parseFromFile (thriftIDL :: P.Parsec Text (T.Program P.SourcePos))
+
+-- | @parse name contents@ parses the contents of a Thrift document with name
+-- @name@ held in @contents@.
+parse
+    :: P.Stream s Char
+    => FilePath -> s -> Either P.ParseError (T.Program P.SourcePos)
+parse = P.parse thriftIDL
+
+-- | Megaparsec parser that is able to parse full Thrift documents.
+thriftIDL :: P.Stream s Char => P.Parsec s (T.Program P.SourcePos)
+thriftIDL = runParser program
+
+
+clearDocstring :: Parser s ()
+clearDocstring = State.modify' (\s -> s { stateDocstring = Nothing })
+
 
 -- | Returns the last docstring recorded by the system and clears it from the
 -- parser state.
-lastDocstring :: Monad p => ThriftParser p n T.Docstring
-lastDocstring = ThriftParser $ do
-    s <- State.gets parserLastDocstring
-    State.put (ParserState Nothing)
+lastDocstring :: Parser s T.Docstring
+lastDocstring = do
+    s <- State.gets stateDocstring
+    clearDocstring
     return s
 
--- | Get an exeecutable parser from the given ThriftParser.
-runThriftParser
-    :: (MonadPlus p, TokenParsing p)
-    => p n
-    -- ^ How to get annotations from the underlying parser. If this is not
-    -- something you need to use, make it @return ()@ and generated types will
-    -- be annotated with @()@.
-    -> ThriftParser p n a
-    -> p a
-runThriftParser getAnnot (ThriftParser p) =
-    Reader.runReaderT (State.evalStateT p (ParserState Nothing)) getAnnot
+-- | Optional whitespace.
+whiteSpace :: P.Stream s Char => Parser s ()
+whiteSpace = someSpace <|> pure ()
 
+-- | Required whitespace.
+someSpace :: P.Stream s Char => Parser s ()
+someSpace = P.skipSome $ readDocstring <|> skipComments <|> skipSpace
+  where
+    skipSpace = P.choice
+      [ P.newline *> clearDocstring
+      , P.skipSome P.spaceChar
+      ]
 
-instance
-  (TokenParsing p, MonadPlus p) => TokenParsing (ThriftParser p n) where
-    -- Docstring parsing works by cheating. We define docstrings as
-    -- whitespace, but we record it when we move over it. If we run into
-    -- another newline or other comments after seeing the docstring's "*/\n",
-    -- we clear the docstring out because it's most likely not attached to the
-    -- entity that follows. So for docstrings to be attached, there must be a
-    -- single newline between "*/" and the entity.
-    someSpace = skipSome $ readDocstring <|> skipComments <|> skipSpace
+    skipComments = P.choice
+        [ P.char '#'            *> skipLine
+        , P.try (P.string "//") *> skipLine
+        , P.try (P.string "/*") *> skipCStyleComment
+        ] *> clearDocstring
+
+    skipLine = void P.eol <|> (P.anyChar *> skipLine)
+
+    skipCStyleComment = P.choice
+      [ P.try (P.string "*/")      *> pure ()
+      , P.skipSome (P.noneOf "/*") *> skipCStyleComment
+      , P.oneOf "/*"               *> skipCStyleComment
+      ]
+
+-- Docstring parsing works by cheating. We define docstrings as
+-- whitespace, but we record it when we move over it. If we run into
+-- another newline or other comments after seeing the docstring's "*/\n",
+-- we clear the docstring out because it's most likely not attached to the
+-- entity that follows. So for docstrings to be attached, there must be a
+-- single newline between "*/" and the entity.
+
+-- TODO this is really ugly. use some sort of docstring parser instead
+
+readDocstring :: P.Stream s Char => Parser s ()
+readDocstring = P.try (P.string "/**") *> loop []
+  where
+
+    saveDocstring s = unless (Text.null s') $
+        State.modify' (\st -> st { stateDocstring = Just s'})
       where
-        skipSpace = choice [
-            newline *> clearDocstring
-          , ThriftParser someSpace
-          ]
+        s' = sanitizeDocstring s
 
-        skipComments = choice [
-              char '#'   *> skipLine
-            , text "//"  *> skipLine
-            , text "/*"  *> skipCStyleComment
-            ] *> clearDocstring
-        skipLine = skipMany (satisfy (/= '\n')) <* newline
-        skipCStyleComment = choice [
-            text "*/"              *> pure ()
-          , skipSome (noneOf "/*") *> skipCStyleComment
-          , oneOf "/*"             *> skipCStyleComment
-          ]
+    loop chunks = P.choice
+      [ do
+          void $ P.try (P.string "*/") >> optional P.spaceChar
+          saveDocstring (Text.strip . Text.concat . reverse $ chunks)
+      , Text.pack      <$> some (P.noneOf "/*") >>= loop . (:chunks)
+      , Text.singleton <$>        P.oneOf "/*"  >>= loop . (:chunks)
+      ]
 
-        -- TODO this is really ugly. use some sort of docstring parser instead
-        clearDocstring = ThriftParser $ State.put (ParserState Nothing)
-        readDocstring = text "/**" *> loop []
-          where
-            saveDocstring s = unless (Text.null s') $
-                ThriftParser . State.put . ParserState . Just $ s'
-              where
-                s' = sanitizeDocstring s
-            loop chunks = choice [
-                text "*/" *> optional (newline <|> space) *>
-                saveDocstring (Text.strip . Text.concat $ reverse chunks)
-              , Text.pack      <$> some (noneOf "/*") >>= loop . (:chunks)
-              , Text.singleton <$>        oneOf "/*"  >>= loop . (:chunks)
-              ]
-            sanitizeDocstring :: Text -> Text
-            sanitizeDocstring =
-                Text.intercalate "\n"
-              . map (Text.dropWhile ignore)
-              . Text.lines
-              where ignore c = c == '*' || c == ' '
+    sanitizeDocstring =
+        Text.intercalate "\n"
+      . map (Text.dropWhile ignore)
+      . Text.lines
+      where ignore c = c == '*' || c == ' '
 
 
--- | Type of identifiers allowed by Thrift.
-idStyle
-    :: forall p n. (TokenParsing p, MonadPlus p)
-    => IdentifierStyle (ThriftParser p n)
-idStyle = (emptyIdents :: IdentifierStyle (ThriftParser p n))
-    { _styleStart = letter <|> char '_'
-    , _styleLetter = alphaNum <|> oneOf "_."
-    }
+symbolic :: P.Stream s Char => Char -> Parser s ()
+symbolic c = void $ PL.symbol whiteSpace [c]
+
+token :: P.Stream s Char => Parser s a -> Parser s a
+token = PL.lexeme whiteSpace
+
+braces, angles, parens :: P.Stream s Char => Parser s a -> Parser s a
+
+braces = P.between (symbolic '{') (symbolic '}')
+angles = P.between (symbolic '<') (symbolic '>')
+parens = P.between (symbolic '(') (symbolic ')')
+
+comma, semi, colon, equals :: P.Stream s Char => Parser s ()
+
+comma  = symbolic ','
+semi   = symbolic ';'
+colon  = symbolic ':'
+equals = symbolic '='
 
 
--- | Constructor for reserved keywords.
-reserved :: (TokenParsing p, MonadPlus p) => Text -> ThriftParser p n ()
-reserved = reserveText idStyle
+-- | Fails the parser if the given identifier is reserved.
+ensureNotReserved :: P.Stream s Char => Text -> Parser s ()
+ensureNotReserved t = do
+    rs <- State.gets stateReserved
+    when (t `Set.member` rs) $
+        P.unexpected ("reserved identifier " ++ show t)
+
+
+-- | Parses a reserved identifier and adds it to the collection of known
+-- reserved keywords.
+reserved :: P.Stream s Char => String -> Parser s ()
+reserved name = P.label name $ token $ do
+    State.modify' $ \s@State{stateReserved = rs} ->
+        s { stateReserved = Set.insert (Text.pack name) rs }
+    P.try $ do
+        void (P.string name)
+        P.notFollowedBy (P.alphaNumChar <|> P.oneOf "_.")
+
+
+text :: P.Stream s Char => Text -> Parser s Text
+text t = P.string (Text.unpack t) *> return t
+
+
+-- | A string literal. @"hello"@
+literal :: P.Stream s Char => Parser s Text
+literal = P.label "string literal" $ token $
+    stringLiteral '"' <|> stringLiteral '\''
+
+stringLiteral :: P.Stream s Char => Char -> Parser s Text
+stringLiteral q = fmap Text.pack $
+    P.char q >> P.manyTill PL.charLiteral (P.char q)
+
+
+integer :: P.Stream s Char => Parser s Integer
+integer = token PL.integer
+
+
+-- | An identifier in a Thrift file.
+identifier :: P.Stream s Char => Parser s Text
+identifier = P.label "identifier" $ token $ do
+    name' <- (:)
+        <$> (P.letterChar <|> P.char '_')
+        <*> many (P.alphaNumChar <|> P.oneOf "_.")
+    let name = Text.pack name'
+    ensureNotReserved name
+    return name
 
 
 -- | Top-level parser to parse complete Thrift documents.
-program :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Program n)
+program :: P.Stream s Char => Parser s (T.Program P.SourcePos)
 program = whiteSpace >>
     T.Program
         <$> many (header     <* optionalSep)
         <*> many (definition <* optionalSep)
-        <*  eof
-
-
--- | A string literal. @"hello"@
-literal :: (TokenParsing p, MonadPlus p) => ThriftParser p n Text
-literal = stringLiteral <|> stringLiteral'
-
-
--- | An identifier in a Thrift file.
-identifier :: (TokenParsing p, MonadPlus p) => ThriftParser p n Text
-identifier = ident idStyle
-
+        <*  P.eof
 
 -- | Headers defined for the IDL.
-header :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Header n)
-header = choice
+header :: P.Stream s Char => Parser s (T.Header P.SourcePos)
+header = P.choice
   [ T.HeaderInclude   <$> include
   , T.HeaderNamespace <$> namespace
   ]
+
 
 -- | The IDL includes another Thrift file.
 --
@@ -230,66 +268,60 @@ header = choice
 -- >
 -- > typedef common.Foo Bar
 --
-include :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Include n)
-include = reserved "include" >> withSrcAnnot (T.Include <$> literal)
+include :: P.Stream s Char => Parser s (T.Include P.SourcePos)
+include = reserved "include" >> withPosition (T.Include <$> literal)
+
 
 -- | Namespace directives allows control of the namespace or package
 -- name used by the generated code for certain languages.
 --
 -- > namespace py my_service.generated
-namespace :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Namespace n)
-namespace = choice
+namespace :: P.Stream s Char => Parser s (T.Namespace P.SourcePos)
+namespace = P.choice
   [ reserved "namespace" >>
-    withSrcAnnot (T.Namespace <$> (text "*" <|> identifier) <*> identifier)
+    withPosition (T.Namespace <$> (text "*" <|> identifier) <*> identifier)
   , reserved "cpp_namespace" >>
-    withSrcAnnot (T.Namespace "cpp" <$> identifier)
+    withPosition (T.Namespace "cpp" <$> identifier)
   , reserved "php_namespace" >>
-    withSrcAnnot (T.Namespace "php" <$> identifier)
+    withPosition (T.Namespace "php" <$> identifier)
   , reserved "py_module" >>
-    withSrcAnnot (T.Namespace "py" <$> identifier)
+    withPosition (T.Namespace "py" <$> identifier)
   , reserved "perl_package" >>
-    withSrcAnnot (T.Namespace "perl" <$> identifier)
+    withPosition (T.Namespace "perl" <$> identifier)
   , reserved "ruby_namespace" >>
-    withSrcAnnot (T.Namespace "rb" <$> identifier)
+    withPosition (T.Namespace "rb" <$> identifier)
   , reserved "java_package" >>
-    withSrcAnnot (T.Namespace "java" <$> identifier)
+    withPosition (T.Namespace "java" <$> identifier)
   , reserved "cocoa_package" >>
-    withSrcAnnot (T.Namespace "cocoa" <$> identifier)
+    withPosition (T.Namespace "cocoa" <$> identifier)
   , reserved "csharp_namespace" >>
-    withSrcAnnot (T.Namespace "csharp" <$> identifier)
+    withPosition (T.Namespace "csharp" <$> identifier)
   ]
 
--- | Retrieve the current source annotation.
-getSrcAnnot :: Monad p => ThriftParser p n n
-getSrcAnnot = ThriftParser . lift $ Reader.ask >>= lift
 
--- | Convenience wrapper for parsers expecting a source annotation.
+-- | Convenience wrapper for parsers expecting a position.
 --
--- The source annotation will be retrieved BEFORE the parser itself is
--- executed.
-withSrcAnnot
-    :: (Functor p, Monad p)
-    => ThriftParser p n (n -> a) -> ThriftParser p n a
-withSrcAnnot p = getSrcAnnot >>= \annot -> p <*> pure annot
+-- The position will be retrieved BEFORE the parser itself is executed.
+withPosition :: P.Stream s Char => Parser s (P.SourcePos -> a) -> Parser s a
+withPosition p = P.getPosition >>= \pos -> p <*> pure pos
 
--- | Convenience wrapper for parsers that expect a docstring and a
--- source annotation.
+
+-- | Convenience wrapper for parsers that expect a docstring and a position.
 --
 -- > data Foo = Foo { bar :: Bar, doc :: Docstring, pos :: Delta }
 -- >
 -- > parseFoo = docstring $ Foo <$> parseBar
 docstring
-    :: (Functor p, Monad p)
-    => ThriftParser p n (T.Docstring -> n -> a) -> ThriftParser p n a
+    :: P.Stream s Char
+    => Parser s (T.Docstring -> P.SourcePos -> a) -> Parser s a
 docstring p = lastDocstring >>= \s -> do
-    annot <- getSrcAnnot
-    p <*> pure s <*> pure annot
+    pos <- P.getPosition
+    p <*> pure s <*> pure pos
 
 
 -- | A constant, type, or service definition.
-definition
-    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Definition n)
-definition = whiteSpace >> choice
+definition :: P.Stream s Char => Parser s (T.Definition P.SourcePos)
+definition = whiteSpace >> P.choice
     [ T.ConstDefinition   <$> constant
     , T.TypeDefinition    <$> typeDefinition
     , T.ServiceDefinition <$> service
@@ -297,8 +329,8 @@ definition = whiteSpace >> choice
 
 
 -- | A type definition.
-typeDefinition :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Type n)
-typeDefinition = choice
+typeDefinition :: P.Stream s Char => Parser s (T.Type P.SourcePos)
+typeDefinition = P.choice
     [ T.TypedefType   <$> typedef
     , T.EnumType      <$> enum
     , T.SenumType     <$> senum
@@ -311,7 +343,7 @@ typeDefinition = choice
 -- | A typedef is just an alias for another type.
 --
 -- > typedef common.Foo Bar
-typedef :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Typedef n)
+typedef :: P.Stream s Char => Parser s (T.Typedef P.SourcePos)
 typedef = reserved "typedef" >>
     docstring (T.Typedef <$> typeReference <*> identifier <*> typeAnnotations)
 
@@ -321,7 +353,7 @@ typedef = reserved "typedef" >>
 -- > enum Role {
 -- >     User = 1, Admin
 -- > }
-enum :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Enum n)
+enum :: P.Stream s Char => Parser s (T.Enum P.SourcePos)
 enum = reserved "enum" >>
     docstring (T.Enum
         <$> identifier
@@ -335,7 +367,7 @@ enum = reserved "enum" >>
 -- >     1: string name
 -- >     2: Role role = Role.User;
 -- > }
-struct :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Struct n)
+struct :: P.Stream s Char => Parser s (T.Struct P.SourcePos)
 struct = reserved "struct" >>
     docstring (T.Struct
         <$> identifier
@@ -349,7 +381,7 @@ struct = reserved "struct" >>
 -- >     1: string stringValue;
 -- >     2: i32 intValue;
 -- > }
-union :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Union n)
+union :: P.Stream s Char => Parser s (T.Union P.SourcePos)
 union = reserved "union" >>
     docstring (T.Union
         <$> identifier
@@ -363,7 +395,7 @@ union = reserved "union" >>
 -- >     1: optional string message
 -- >     2: required string username
 -- > }
-exception :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Exception n)
+exception :: P.Stream s Char => Parser s (T.Exception P.SourcePos)
 exception = reserved "exception" >>
      docstring (T.Exception
         <$> identifier
@@ -372,18 +404,18 @@ exception = reserved "exception" >>
 
 
 -- | Whether a field is @required@ or @optional@.
-fieldRequiredness
-    :: (TokenParsing p, MonadPlus p) => ThriftParser p n T.FieldRequiredness
-fieldRequiredness = choice [
-    reserved "required" *> pure T.Required
+fieldRequiredness :: P.Stream s Char => Parser s T.FieldRequiredness
+fieldRequiredness = P.choice
+  [ reserved "required" *> pure T.Required
   , reserved "optional" *> pure T.Optional
   ]
 
+
 -- | A struct field.
-field :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Field n)
+field :: P.Stream s Char => Parser s (T.Field P.SourcePos)
 field = docstring $
   T.Field
-    <$> optional (integer <* symbolic ':')
+    <$> optional (integer <* colon)
     <*> optional fieldRequiredness
     <*> typeReference
     <*> identifier
@@ -393,18 +425,18 @@ field = docstring $
 
 
 -- | A value defined inside an @enum@.
-enumDef :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.EnumDef n)
+enumDef :: P.Stream s Char => Parser s (T.EnumDef P.SourcePos)
 enumDef = docstring $
   T.EnumDef
     <$> identifier
-    <*> optional (equals *> integer)
+    <*> optional (equals *> PL.signed whiteSpace integer)
     <*> typeAnnotations
     <*  optionalSep
 
 
--- | An string-only enum. These are a deprecated feature of Thrift and
--- shouldn't be used.
-senum :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Senum n)
+-- | An string-only enum. These are a deprecated feature of Thrift and shouldn't
+-- be used.
+senum :: P.Stream s Char => Parser s (T.Senum P.SourcePos)
 senum = reserved "senum" >> docstring
     (T.Senum
         <$> identifier
@@ -415,7 +447,7 @@ senum = reserved "senum" >> docstring
 -- | A 'const' definition.
 --
 -- > const i32 code = 1;
-constant :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Const n)
+constant :: P.Stream s Char => Parser s (T.Const P.SourcePos)
 constant = do
   reserved "const"
   docstring $
@@ -427,11 +459,10 @@ constant = do
 
 
 -- | A constant value literal.
-constantValue
-    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.ConstValue n)
-constantValue = withSrcAnnot $ choice [
-    either T.ConstInt T.ConstFloat
-                      <$> integerOrDouble
+constantValue :: P.Stream s Char => Parser s (T.ConstValue P.SourcePos)
+constantValue = withPosition $ P.choice
+  [ either T.ConstInt T.ConstFloat
+                      <$> token (PL.signed whiteSpace PL.number)
   , T.ConstLiteral    <$> literal
   , T.ConstIdentifier <$> identifier
   , T.ConstList       <$> constList
@@ -439,12 +470,11 @@ constantValue = withSrcAnnot $ choice [
   ]
 
 
-constList
-    :: (TokenParsing p, MonadPlus p) => ThriftParser p n [T.ConstValue n]
+constList :: P.Stream s Char => Parser s [T.ConstValue P.SourcePos]
 constList = symbolic '[' *> loop []
   where
-    loop xs = choice [
-        symbolic ']' *> return (reverse xs)
+    loop xs = P.choice
+      [ symbolic ']' *> return (reverse xs)
       , (:) <$> (constantValue <* optionalSep)
             <*> pure xs
             >>= loop
@@ -452,11 +482,11 @@ constList = symbolic '[' *> loop []
 
 
 constMap
-    :: (TokenParsing p, MonadPlus p)
-    => ThriftParser p n [(T.ConstValue n, T.ConstValue n)]
+    :: P.Stream s Char
+    => Parser s [(T.ConstValue P.SourcePos, T.ConstValue P.SourcePos)]
 constMap = symbolic '{' *> loop []
   where
-    loop xs = choice [
+    loop xs = P.choice [
         symbolic '}' *> return (reverse xs)
       , (:) <$> (constantValuePair <* optionalSep)
             <*> pure xs
@@ -465,30 +495,29 @@ constMap = symbolic '{' *> loop []
 
 
 constantValuePair
-    :: (TokenParsing p, MonadPlus p)
-    => ThriftParser p n (T.ConstValue n, T.ConstValue n)
+    :: P.Stream s Char
+    => Parser s (T.ConstValue P.SourcePos, T.ConstValue P.SourcePos)
 constantValuePair =
     (,) <$> (constantValue <* colon)
         <*> (constantValue <* optionalSep)
 
 
 -- | A reference to a built-in or defined field.
-typeReference
-    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
-typeReference = choice [
-    baseType
+typeReference :: P.Stream s Char => Parser s (T.TypeReference P.SourcePos)
+typeReference = P.choice
+  [ baseType
   , containerType
-  , withSrcAnnot (T.DefinedType <$> identifier)
+  , withPosition (T.DefinedType <$> identifier)
   ]
 
 
 baseType
-    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
-baseType = withSrcAnnot $
-    choice [reserved s *> (v <$> typeAnnotations) | (s, v) <- bases]
+    :: P.Stream s Char => Parser s (T.TypeReference P.SourcePos)
+baseType = withPosition $
+    P.choice [reserved s *> (v <$> typeAnnotations) | (s, v) <- bases]
   where
-    bases = [
-        ("string", T.StringType)
+    bases =
+      [ ("string", T.StringType)
       , ("binary", T.BinaryType)
       , ("slist", T.SListType)
       , ("bool", T.BoolType)
@@ -502,9 +531,9 @@ baseType = withSrcAnnot $
 
 
 containerType
-    :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.TypeReference n)
-containerType = withSrcAnnot $
-    choice [mapType, setType, listType] <*> typeAnnotations
+    :: P.Stream s Char => Parser s (T.TypeReference P.SourcePos)
+containerType = withPosition $
+    P.choice [mapType, setType, listType] <*> typeAnnotations
   where
     mapType = reserved "map" >>
         angles (T.MapType <$> (typeReference <* comma) <*> typeReference)
@@ -517,7 +546,7 @@ containerType = withSrcAnnot $
 -- > service MyService {
 -- >     // ...
 -- > }
-service :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Service n)
+service :: P.Stream s Char => Parser s (T.Service P.SourcePos)
 service = do
   reserved "service"
   docstring $
@@ -532,7 +561,7 @@ service = do
 --
 -- > Foo getFoo() throws (1: FooDoesNotExist doesNotExist);
 -- > oneway void putBar(1: Bar bar);
-function :: (TokenParsing p, MonadPlus p) => ThriftParser p n (T.Function n)
+function :: P.Stream s Char => Parser s (T.Function P.SourcePos)
 function = docstring $
     T.Function
         <$> ((reserved "oneway" *> pure True) <|> pure False)
@@ -550,24 +579,16 @@ function = docstring $
 --
 -- These do not usually affect code generation but allow for custom logic if
 -- writing your own code generator.
-typeAnnotations
-    :: (TokenParsing p, MonadPlus p)
-    => ThriftParser p n [T.TypeAnnotation]
+typeAnnotations :: P.Stream s Char => Parser s [T.TypeAnnotation]
 typeAnnotations = parens (many typeAnnotation) <|> pure []
 
 
-typeAnnotation
-    :: (TokenParsing p, MonadPlus p)
-    => ThriftParser p n T.TypeAnnotation
+typeAnnotation :: P.Stream s Char => Parser s T.TypeAnnotation
 typeAnnotation =
     T.TypeAnnotation
         <$> identifier
         <*> (optional (equals *> literal) <* optionalSep)
 
 
-optionalSep :: (TokenParsing p, MonadPlus p) => ThriftParser p n ()
+optionalSep :: P.Stream s Char => Parser s ()
 optionalSep = void $ optional (comma <|> semi)
-
-
-equals :: (TokenParsing p, MonadPlus p) => ThriftParser p n ()
-equals = void $ symbolic '='

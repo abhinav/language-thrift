@@ -9,10 +9,10 @@
 -- This module defines types that compose a Thrift IDL file.
 --
 -- Most of the types have an optional @srcAnnot@ parameter that represents a
--- parser-specific source annotation. With @trifecta@ this can hold the
--- 'Text.Trifecta.Delta.Delta'. If you do not have need of this, you can use
--- @()@ as the parameter.
---
+-- source annotation. The parser produces types annotated with their position
+-- in the Thrift file ('Text.Megaparsec.SourcePos'). When constructing the AST
+-- by hand, you can use @()@. The types are @Functor@s so you can use 'fmap'
+-- to change the annotation on all objects in a tree.
 module Language.Thrift.Types
     ( module Language.Thrift.Internal.Types
     ) where

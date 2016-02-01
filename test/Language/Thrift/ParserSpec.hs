@@ -6,7 +6,7 @@ import Control.Applicative
 #endif
 
 import Test.Hspec
-import Text.Parser.Combinators (eof)
+import Text.Megaparsec (eof)
 
 import TestUtils
 

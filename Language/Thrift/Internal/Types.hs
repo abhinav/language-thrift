@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
+{-# LANGUAGE DeriveFunctor          #-}
 {-# LANGUAGE DeriveGeneric          #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -170,7 +171,7 @@ data ConstValue srcAnnot
     | ConstMap [(ConstValue srcAnnot, ConstValue srcAnnot)] srcAnnot
     -- ^ A literal list containing other constant values.
     -- @{"hellO": 1, "world": 2}@
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 _ConstInt :: Prism' (ConstValue a) (Integer, a)
 _ConstInt = prism' (uncurry ConstInt) $ \c ->
@@ -260,7 +261,7 @@ data TypeReference srcAnnot
     -- ^ @set\<baz\>@ and annotations.
     | ListType (TypeReference srcAnnot) [TypeAnnotation] srcAnnot
     -- ^ @list\<qux\>@ and annotations.
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 _DefinedType :: Prism' (TypeReference a) (Text, a)
 _DefinedType = prism' (uncurry DefinedType) $ \r ->
@@ -417,7 +418,7 @@ data Field srcAnnot = Field
     -- ^ Documentation.
     , fieldSrcAnnot     :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 identifier :: Lens' (Field a) (Maybe Integer)
 identifier = lens fieldIdentifier (\s a -> s { fieldIdentifier = a })
@@ -465,7 +466,7 @@ data Function srcAnnot = Function
     -- ^ Documentation.
     , functionSrcAnnot    :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 oneWay :: Lens' (Function a) Bool
 oneWay = lens functionOneWay (\s a -> s { functionOneWay = a })
@@ -509,7 +510,7 @@ data Service srcAnnot = Service
     -- ^ Documentation.
     , serviceSrcAnnot    :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 functions :: Lens' (Service a) [Function a]
 functions = lens serviceFunctions (\s a -> s { serviceFunctions = a })
@@ -543,7 +544,7 @@ data Const srcAnnot = Const
     -- ^ Documentation.
     , constSrcAnnot  :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 instance HasValue (Const a) (ConstValue a) where
     value = lens constValue (\s a -> s { constValue = a })
@@ -574,7 +575,7 @@ data Typedef srcAnnot = Typedef
     -- ^ Documentation.
     , typedefSrcAnnot    :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 targetType :: Lens' (Typedef a) (TypeReference a)
 targetType = lens typedefTargetType (\s a -> s { typedefTargetType = a })
@@ -603,7 +604,7 @@ data EnumDef srcAnnot = EnumDef
     -- ^ Documentation
     , enumDefSrcAnnot    :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 instance HasValue (EnumDef a) (Maybe Integer) where
     value = lens enumDefValue (\s a -> s { enumDefValue = a })
@@ -636,7 +637,7 @@ data Enum srcAnnot = Enum
     -- ^ Documentation.
     , enumSrcAnnot    :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 class HasValues s a | s -> a where
     values :: Lens' s a
@@ -672,7 +673,7 @@ data Struct srcAnnot = Struct
     -- ^ Documentation.
     , structSrcAnnot    :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 instance HasName (Struct a) where
     name = lens structName (\s a -> s { structName = a })
@@ -706,7 +707,7 @@ data Union srcAnnot = Union
     -- ^ Documentation.
     , unionSrcAnnot    :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 instance HasName (Union a) where
     name = lens unionName (\s a -> s { unionName = a })
@@ -740,7 +741,7 @@ data Exception srcAnnot = Exception
     -- ^ Documentation.
     , exceptionSrcAnnot    :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 instance HasName (Exception a) where
     name = lens exceptionName (\s a -> s { exceptionName = a })
@@ -768,7 +769,7 @@ data Senum srcAnnot = Senum
     -- ^ Documentation.
     , senumSrcAnnot    :: srcAnnot
     }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 instance HasValues (Senum a) [Text] where
     values = lens senumValues (\s a -> s { senumValues = a })
@@ -799,7 +800,7 @@ data Type srcAnnot
       ExceptionType (Exception srcAnnot)
     | -- | @senum@
       SenumType (Senum srcAnnot)
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 instance HasName (Type a) where
     name = lens getter setter
@@ -881,7 +882,7 @@ data Definition srcAnnot
       TypeDefinition (Type srcAnnot)
     | -- | A service definition.
       ServiceDefinition (Service srcAnnot)
-  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 instance HasName (Definition a) where
     name = lens getter setter
@@ -938,7 +939,7 @@ data Namespace srcAnnot = Namespace
     -- language.
     , namespaceSrcAnnot :: srcAnnot
     }
-    deriving (Show, Ord, Eq, Data, Typeable, Generic)
+    deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 language :: Lens' (Namespace a) Text
 language = lens namespaceLanguage (\s a -> s { namespaceLanguage = a })
@@ -960,7 +961,7 @@ data Include srcAnnot = Include
     -- ^ Path to the included file.
     , includeSrcAnnot :: srcAnnot
     }
-    deriving (Show, Ord, Eq, Data, Typeable, Generic)
+    deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 path :: Lens' (Include a) Text
 path = lens includePath (\s a -> s { includePath = a })
@@ -974,7 +975,7 @@ data Header srcAnnot
       HeaderInclude (Include srcAnnot)
     | -- | A @namespace@ specifier.
       HeaderNamespace (Namespace srcAnnot)
-    deriving (Show, Ord, Eq, Data, Typeable, Generic)
+    deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 _Include :: Prism' (Header ann) (Include ann)
 _Include = prism' HeaderInclude $ \h ->
@@ -996,7 +997,7 @@ data Program srcAnnot = Program
     , programDefinitions :: [Definition srcAnnot]
     -- ^ Types and services defined in the document.
     }
-    deriving (Show, Ord, Eq, Data, Typeable, Generic)
+    deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
 
 headers :: Lens' (Program a) [Header a]
 headers = lens programHeaders (\s a -> s { programHeaders = a })

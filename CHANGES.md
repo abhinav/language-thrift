@@ -1,3 +1,9 @@
+0.8.0.0
+=======
+
+-   Switch parser to `megaparsec`. This significantly reduces the number of
+    transitive dependencies for this package.
+
 0.7.0.1
 =======
 
