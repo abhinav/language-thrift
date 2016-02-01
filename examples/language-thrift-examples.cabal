@@ -10,16 +10,16 @@ executable reformatIDL
     main-is: reformatIDL.hs
     build-depends:
         base >=4.7 && <4.9,
-        language-thrift -any,
         ansi-wl-pprint -any,
+        language-thrift -any
     default-language: Haskell2010
 
 executable generateHaskellTypes
     main-is: generateHaskellTypes.hs
     build-depends:
         base >=4.7 && <4.9,
-        language-thrift -any,
         ansi-wl-pprint -any,
-        text -any,
+        language-thrift -any,
+        text -any
     default-language: Haskell2010
 
