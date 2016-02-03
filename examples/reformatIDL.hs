@@ -6,7 +6,8 @@ module Main (main) where
 --
 -- Docstrings in the IDL are preserved but COMMENTS WILL BE LOST.
 
-import System.IO (stderr)
+import System.Exit (exitFailure)
+import System.IO   (stderr)
 
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
@@ -17,4 +18,4 @@ main = do
     result <- parse "stdin" `fmap` getContents
     case result of
         Right p  -> PP.putDoc (PP.pretty p) >> putStrLn ""
-        Left err -> print err
+        Left err -> print err >> exitFailure
