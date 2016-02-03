@@ -134,7 +134,7 @@ someSpace = P.skipSome $ readDocstring <|> skipComments <|> skipSpace
         , P.try (P.string "/*") *> skipCStyleComment
         ] *> clearDocstring
 
-    skipLine = void P.eol <|> (P.anyChar *> skipLine)
+    skipLine = void P.eol <|> P.eof <|> (P.anyChar *> skipLine)
 
     skipCStyleComment = P.choice
       [ P.try (P.string "*/")      *> pure ()
