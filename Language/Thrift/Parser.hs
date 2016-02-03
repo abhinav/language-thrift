@@ -52,6 +52,8 @@ module Language.Thrift.Parser
     , typeReference
     , constantValue
 
+    , docstring
+
     -- * Parser
 
     , Parser
@@ -107,8 +109,7 @@ clearDocstring :: Parser s ()
 clearDocstring = State.modify' (\s -> s { stateDocstring = Nothing })
 
 
--- | Returns the last docstring recorded by the system and clears it from the
--- parser state.
+-- | Returns the last docstring recorded by the parser and forgets about it.
 lastDocstring :: Parser s T.Docstring
 lastDocstring = do
     s <- State.gets stateDocstring
@@ -123,6 +124,11 @@ whiteSpace = someSpace <|> pure ()
 someSpace :: P.Stream s Char => Parser s ()
 someSpace = P.skipSome $ readDocstring <|> skipComments <|> skipSpace
   where
+    readDocstring = do
+        s <- docstring
+        unless (Text.null s) $
+            State.modify' (\st -> st { stateDocstring = Just s})
+
     skipSpace = P.choice
       [ P.newline *> clearDocstring
       , P.skipSome P.spaceChar
@@ -157,19 +163,22 @@ skipUpTo p = loop
 hspace :: P.Stream s Char => Parser s ()
 hspace = void $ P.oneOf " \t"
 
--- | Read a docstring at the current position and store it in the parser
--- state. Docstrings start with @/**@.
+-- | A javadoc-style docstring.
 --
--- Fails without consuming input if no docstring was found.
-readDocstring :: P.Stream s Char => Parser s ()
-readDocstring = do
+-- > /**
+-- >  * foo
+-- >  */
+--
+-- This parses attempts to preserve indentation inside the docstring while
+-- getting rid of the aligned @*@s (if any) and any other preceding space.
+--
+docstring :: P.Stream s Char => Parser s Text
+docstring = do
     P.try (P.string "/**") >> P.skipMany hspace
     indent <- P.sourceColumn <$> P.getPosition
     isNewLine <- maybeEOL
     chunks <- loop isNewLine (indent - 1) []
-    unless (null chunks) $
-        let s = Text.intercalate "\n" chunks
-         in State.modify' (\st -> st { stateDocstring = Just s})
+    return $! Text.intercalate "\n" chunks
   where
     maybeEOL = (P.eol >> return True) <|> return False
 
@@ -327,11 +336,11 @@ withPosition p = P.getPosition >>= \pos -> p <*> pure pos
 --
 -- > data Foo = Foo { bar :: Bar, doc :: Docstring, pos :: Delta }
 -- >
--- > parseFoo = docstring $ Foo <$> parseBar
-docstring
+-- > parseFoo = withDocstring $ Foo <$> parseBar
+withDocstring
     :: P.Stream s Char
     => Parser s (T.Docstring -> P.SourcePos -> a) -> Parser s a
-docstring p = lastDocstring >>= \s -> do
+withDocstring p = lastDocstring >>= \s -> do
     pos <- P.getPosition
     p <*> pure s <*> pure pos
 
@@ -361,8 +370,8 @@ typeDefinition = P.choice
 --
 -- > typedef common.Foo Bar
 typedef :: P.Stream s Char => Parser s (T.Typedef P.SourcePos)
-typedef = reserved "typedef" >>
-    docstring (T.Typedef <$> typeReference <*> identifier <*> typeAnnotations)
+typedef = reserved "typedef" >> withDocstring
+    (T.Typedef <$> typeReference <*> identifier <*> typeAnnotations)
 
 
 -- | Enums are sets of named integer values.
@@ -371,11 +380,12 @@ typedef = reserved "typedef" >>
 -- >     User = 1, Admin
 -- > }
 enum :: P.Stream s Char => Parser s (T.Enum P.SourcePos)
-enum = reserved "enum" >>
-    docstring (T.Enum
+enum = reserved "enum" >> withDocstring
+    ( T.Enum
         <$> identifier
         <*> braces (many enumDef)
-        <*> typeAnnotations)
+        <*> typeAnnotations
+    )
 
 
 -- | A @struct@.
@@ -385,11 +395,12 @@ enum = reserved "enum" >>
 -- >     2: Role role = Role.User;
 -- > }
 struct :: P.Stream s Char => Parser s (T.Struct P.SourcePos)
-struct = reserved "struct" >>
-    docstring (T.Struct
+struct = reserved "struct" >> withDocstring
+    ( T.Struct
         <$> identifier
         <*> braces (many field)
-        <*> typeAnnotations)
+        <*> typeAnnotations
+    )
 
 
 -- | A @union@ of types.
@@ -399,11 +410,12 @@ struct = reserved "struct" >>
 -- >     2: i32 intValue;
 -- > }
 union :: P.Stream s Char => Parser s (T.Union P.SourcePos)
-union = reserved "union" >>
-    docstring (T.Union
+union = reserved "union" >> withDocstring
+    ( T.Union
         <$> identifier
         <*> braces (many field)
-        <*> typeAnnotations)
+        <*> typeAnnotations
+    )
 
 
 -- | An @exception@ that can be raised by service methods.
@@ -413,11 +425,12 @@ union = reserved "union" >>
 -- >     2: required string username
 -- > }
 exception :: P.Stream s Char => Parser s (T.Exception P.SourcePos)
-exception = reserved "exception" >>
-     docstring (T.Exception
+exception = reserved "exception" >> withDocstring
+    ( T.Exception
         <$> identifier
         <*> braces (many field)
-        <*> typeAnnotations)
+        <*> typeAnnotations
+    )
 
 
 -- | Whether a field is @required@ or @optional@.
@@ -430,7 +443,7 @@ fieldRequiredness = P.choice
 
 -- | A struct field.
 field :: P.Stream s Char => Parser s (T.Field P.SourcePos)
-field = docstring $
+field = withDocstring $
   T.Field
     <$> optional (integer <* colon)
     <*> optional fieldRequiredness
@@ -443,7 +456,7 @@ field = docstring $
 
 -- | A value defined inside an @enum@.
 enumDef :: P.Stream s Char => Parser s (T.EnumDef P.SourcePos)
-enumDef = docstring $
+enumDef = withDocstring $
   T.EnumDef
     <$> identifier
     <*> optional (equals *> PL.signed whiteSpace integer)
@@ -454,11 +467,12 @@ enumDef = docstring $
 -- | An string-only enum. These are a deprecated feature of Thrift and shouldn't
 -- be used.
 senum :: P.Stream s Char => Parser s (T.Senum P.SourcePos)
-senum = reserved "senum" >> docstring
-    (T.Senum
+senum = reserved "senum" >> withDocstring
+    ( T.Senum
         <$> identifier
         <*> braces (many (literal <* optionalSep))
-        <*> typeAnnotations)
+        <*> typeAnnotations
+    )
 
 
 -- | A 'const' definition.
@@ -467,7 +481,7 @@ senum = reserved "senum" >> docstring
 constant :: P.Stream s Char => Parser s (T.Const P.SourcePos)
 constant = do
   reserved "const"
-  docstring $
+  withDocstring $
     T.Const
         <$> typeReference
         <*> (identifier <* equals)
@@ -567,7 +581,7 @@ containerType = withPosition $
 service :: P.Stream s Char => Parser s (T.Service P.SourcePos)
 service = do
   reserved "service"
-  docstring $
+  withDocstring $
     T.Service
         <$> identifier
         <*> optional (reserved "extends" *> identifier)
@@ -580,7 +594,7 @@ service = do
 -- > Foo getFoo() throws (1: FooDoesNotExist doesNotExist);
 -- > oneway void putBar(1: Bar bar);
 function :: P.Stream s Char => Parser s (T.Function P.SourcePos)
-function = docstring $
+function = withDocstring $
     T.Function
         <$> ((reserved "oneway" *> pure True) <|> pure False)
         <*> ((reserved "void" *> pure Nothing) <|> Just <$> typeReference)

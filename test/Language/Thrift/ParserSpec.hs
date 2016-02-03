@@ -1,12 +1,16 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
 module Language.Thrift.ParserSpec (spec) where
 
 #if __GLASGOW_HASKELL__ < 709
 import Control.Applicative
 #endif
 
+import Control.Monad
+import Data.Text       (pack)
 import Test.Hspec
-import Text.Megaparsec (eof)
+import Text.Megaparsec (SourcePos, eof, skipMany, spaceChar)
 
 import TestUtils
 
@@ -17,7 +21,40 @@ spec :: Spec
 spec = describe "Parser" $ do
 
     it "can parse empty documents" $
-        assertParses P.program (T.Program [] []) ""
+        parseSuccessCases P.program $ map (, T.Program [] [])
+            [ ""
+            , "// line comment at EOF"
+            , "# line comment at EOF\n"
+            , "/** docstring at EOF */"
+            , "/** docstring with space\nand newline at EOF\n\t\t*/ "
+            , "/* comment\n\tat eof\n\t */"
+            ]
+
+    it "can parse docstrings" $ forM_
+        [ ( return "/** foo */", "foo " )
+        , ( return "/** foo\n */", "foo" )
+        , ( readFile "test/data/docstring-1.txt"
+          , "Hello. This is the first\n" ++
+            "paragraph.\n\n" ++
+            "    This is some text indented 4 spaces,\n" ++
+            "    spread across multiple lines.\n\n" ++
+            "Back."
+          )
+        , ( readFile "test/data/docstring-2.txt"
+          , "The docstring itself is indented 4 spaces.\n\n" ++
+            "And has a missing * in between."
+          )
+        ] $ \(i, o) -> do
+            input <- i
+            assertParses (skipMany spaceChar *> P.docstring) (pack o) input
+
+    it "can parse basic constants" $ parseSuccessCases P.constantValue
+        [ ("42", T.ConstInt 42 ())
+        , ("0x2a", T.ConstInt 42 ())
+        , ("1.2", T.ConstFloat 1.2 ())
+        , ("foo", T.ConstIdentifier "foo" ())
+        , ("\"foo\"", T.ConstLiteral "foo" ())
+        ]
 
     testParseFailure
 
@@ -45,3 +82,9 @@ testParseFailure = do
 
 parseFailureCases :: Show a => Parser a -> [String] -> Expectation
 parseFailureCases p = mapM_ (p `shouldNotParse`)
+
+parseSuccessCases
+    :: (Show (a ()), Eq (a ()), Functor a)
+    => Parser (a SourcePos) -> [(String, a ())] -> Expectation
+parseSuccessCases parser = mapM_ $ \(input, value) ->
+    assertParses (void `fmap` parser) value input

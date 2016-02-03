@@ -52,6 +52,8 @@ module Language.Thrift.Pretty
     , typeReference
     , constantValue
 
+    , docstring
+
     -- * Configuration
 
     , Config(..)
@@ -59,12 +61,11 @@ module Language.Thrift.Pretty
     ) where
 
 #if __GLASGOW_HASKELL__ >= 709
-import Prelude hiding (lines, (<$>))
-#else
-import Prelude hiding (lines)
+import Prelude hiding ((<$>))
 #endif
 
-import Data.Text (Text, lines, strip, unpack)
+import           Data.Text (Text)
+import qualified Data.Text as Text
 
 import Text.PrettyPrint.ANSI.Leijen (Doc, Pretty (..), align, bold, cyan,
                                      double, dquotes, dullblue, empty, enclose,
@@ -359,7 +360,7 @@ literal = cyan . dquotes . text
     -- TODO: escaping?
 
 text :: Text -> Doc
-text = P.text . unpack
+text = P.text . Text.unpack
 
 reserved :: String -> Doc
 reserved = magenta . P.text
@@ -372,17 +373,22 @@ declare = bold . text
 
 ($$) :: T.Docstring -> Doc -> Doc
 ($$) Nothing y = y
-($$) (Just t) y = case lines (strip t) of
-  [] -> y
-  ls -> dullblue (wrapComments ls) <$> y
+($$) (Just t) y =
+    if Text.null t'
+        then y
+        else docstring t' <$> y
+  where
+    t' = Text.strip t
+
+infixr 1 $$
+
+docstring :: Text -> Doc
+docstring = dullblue . wrapComments . Text.lines
   where
     wrapComments ls = align . vsep
       $ text "/**"
       : map (\l -> text " *" <+> text l) ls
      ++ [text " */"]
-
-infixr 1 $$
-
 
 block :: Int -> Doc -> [Doc] -> Doc
 block indent s items = enclose lbrace rbrace $

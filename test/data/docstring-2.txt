@@ -1,0 +1,5 @@
+    /**
+     * The docstring itself is indented 4 spaces.
+
+     * And has a missing * in between.
+     */
