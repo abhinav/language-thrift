@@ -13,6 +13,12 @@
 -- in the Thrift file ('Text.Megaparsec.SourcePos'). When constructing the AST
 -- by hand, you can use @()@. The types are @Functor@s so you can use 'fmap'
 -- to change the annotation on all objects in a tree.
+--
+-- Lenses for attributes of most types are provided for use with the `lens`
+-- library.
+--
+-- Types representing the AST all have 'Text.PrettyPrint.ANSI.Leijen.Pretty'
+-- instances to go with them.
 module Language.Thrift.Types
     ( module Language.Thrift.Internal.Types
     ) where

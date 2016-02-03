@@ -142,37 +142,73 @@ someSpace = P.skipSome $ readDocstring <|> skipComments <|> skipSpace
       , P.oneOf "/*"               *> skipCStyleComment
       ]
 
--- Docstring parsing works by cheating. We define docstrings as
--- whitespace, but we record it when we move over it. If we run into
--- another newline or other comments after seeing the docstring's "*/\n",
--- we clear the docstring out because it's most likely not attached to the
--- entity that follows. So for docstrings to be attached, there must be a
--- single newline between "*/" and the entity.
-
--- TODO this is really ugly. use some sort of docstring parser instead
-
-readDocstring :: P.Stream s Char => Parser s ()
-readDocstring = P.try (P.string "/**") *> loop []
+-- | @p `skipUpTo` n@ skips @p@ @n@ times or until @p@ stops matching --
+-- whichever comes first.
+skipUpTo :: P.Stream s Char => Parser s a -> Int -> Parser s ()
+skipUpTo p = loop
   where
+    loop 0 = return ()
+    loop n =
+        ( do
+            void $ P.try p
+            loop $! n - 1
+        ) <|> return ()
 
-    saveDocstring s = unless (Text.null s') $
-        State.modify' (\st -> st { stateDocstring = Just s'})
+hspace :: P.Stream s Char => Parser s ()
+hspace = void $ P.oneOf " \t"
+
+-- | Read a docstring at the current position and store it in the parser
+-- state. Docstrings start with @/**@.
+--
+-- Fails without consuming input if no docstring was found.
+readDocstring :: P.Stream s Char => Parser s ()
+readDocstring = do
+    P.try (P.string "/**") >> P.skipMany hspace
+    indent <- P.sourceColumn <$> P.getPosition
+    isNewLine <- maybeEOL
+    chunks <- loop isNewLine (indent - 1) []
+    unless (null chunks) $
+        let s = Text.intercalate "\n" chunks
+         in State.modify' (\st -> st { stateDocstring = Just s})
+  where
+    maybeEOL = (P.eol >> return True) <|> return False
+
+    commentChar =
+        P.noneOf "*\r\n" <|>
+        P.try (P.char '*' <* P.notFollowedBy (P.char '/'))
+
+    loop shouldDedent maxDedent chunks = do
+        when shouldDedent $
+            hspace `skipUpTo` maxDedent
+        finishComment <|> readDocLine
       where
-        s' = sanitizeDocstring s
+        finishComment = do
+            P.try (P.skipMany hspace <* P.string "*/")
+            void $ optional P.spaceChar
+            return $! reverse chunks
+        readDocLine = do
+            -- Lines could have aligned *s at the start.
+            --
+            --      /**
+            --       * foo
+            --       * bar
+            --       */
+            --
+            -- But only if we dedented. If we didn't, that's possibly because,
+            --
+            --      /** foo [..]
+            --
+            -- So if foo starts with "*", we don't want to drop that.
+            when shouldDedent . void $
+                optional $ P.try (P.char '*' >> optional hspace)
 
-    loop chunks = P.choice
-      [ do
-          void $ P.try (P.string "*/") >> optional P.spaceChar
-          saveDocstring (Text.strip . Text.concat . reverse $ chunks)
-      , Text.pack      <$> some (P.noneOf "/*") >>= loop . (:chunks)
-      , Text.singleton <$>        P.oneOf "/*"  >>= loop . (:chunks)
-      ]
+            line <- Text.pack <$> P.many commentChar
 
-    sanitizeDocstring =
-        Text.intercalate "\n"
-      . map (Text.dropWhile ignore)
-      . Text.lines
-      where ignore c = c == '*' || c == ' '
+            -- This line most likely ends with a newline but if it's the last
+            -- one, it could also be "foo */"
+            void (optional hspace >> maybeEOL)
+
+            loop True maxDedent (line:chunks)
 
 
 symbolic :: P.Stream s Char => Char -> Parser s ()
