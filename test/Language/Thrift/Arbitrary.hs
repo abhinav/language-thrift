@@ -85,7 +85,7 @@ instance Arbitrary (T.Namespace ()) where
     shrink = genericShrink
     arbitrary = T.Namespace <$> elements scopes <*> arbitrary <*> pure ()
       where
-        scopes = ["py", "rb", "java", "hs", "cpp"]
+        scopes = ["*", "py", "rb", "java", "hs", "cpp"]
 
 
 instance Arbitrary (T.Definition ()) where

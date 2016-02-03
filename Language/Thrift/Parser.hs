@@ -238,10 +238,6 @@ reserved name = P.label name $ token $ P.try $ do
     P.notFollowedBy (P.alphaNumChar <|> P.oneOf "_.")
 
 
-text :: P.Stream s Char => Text -> Parser s Text
-text t = P.string (Text.unpack t) *> return t
-
-
 -- | A string literal. @"hello"@
 literal :: P.Stream s Char => Parser s Text
 literal = P.label "string literal" $ token $
@@ -298,7 +294,7 @@ include = reserved "include" >> withPosition (T.Include <$> literal)
 namespace :: P.Stream s Char => Parser s (T.Namespace P.SourcePos)
 namespace = P.choice
   [ reserved "namespace" >>
-    withPosition (T.Namespace <$> (text "*" <|> identifier) <*> identifier)
+    withPosition (T.Namespace <$> (star <|> identifier) <*> identifier)
   , reserved "cpp_namespace" >>
     withPosition (T.Namespace "cpp" <$> identifier)
   , reserved "php_namespace" >>
@@ -316,6 +312,8 @@ namespace = P.choice
   , reserved "csharp_namespace" >>
     withPosition (T.Namespace "csharp" <$> identifier)
   ]
+  where
+    star = symbolic '*' >> pure "*"
 
 
 -- | Convenience wrapper for parsers expecting a position.
