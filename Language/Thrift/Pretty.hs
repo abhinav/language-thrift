@@ -98,8 +98,10 @@ prettyPrintHighlighted = program defaultConfig
 -- | Pretty print a Thrift IDL.
 program :: Config -> T.Program ann -> Doc
 program c T.Program{..} =
-    vsep (map header programHeaders) <$> line <>
-    map (definition c) programDefinitions `sepBy` (line <> line)
+    ( if null programHeaders
+        then empty
+        else vsep (map header programHeaders) <$> line
+    ) <> map (definition c) programDefinitions `sepBy` (line <> line)
 
 instance Pretty (T.Program a) where
     pretty = program defaultConfig
