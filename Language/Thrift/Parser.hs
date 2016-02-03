@@ -478,7 +478,8 @@ constant = do
 -- | A constant value literal.
 constantValue :: P.Stream s Char => Parser s (T.ConstValue P.SourcePos)
 constantValue = withPosition $ P.choice
-  [ either T.ConstInt T.ConstFloat
+  [ P.try (P.string "0x") >> T.ConstInt <$> token PL.hexadecimal
+  , either T.ConstInt T.ConstFloat
                       <$> token (PL.signed whiteSpace PL.number)
   , T.ConstLiteral    <$> literal
   , T.ConstIdentifier <$> identifier
