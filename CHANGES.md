@@ -1,8 +1,8 @@
 0.8.0.0
 =======
 
-This release contains significant breaking changes and cuts the number of
-transitive dependencies down significantly.
+This release contains breaking changes. The number of transitive dependencies
+has been reduced significantly.
 
 -   Switched parser to `megaparsec`. `trifecta` and `parsers` bring too many
     dependencies with them.
