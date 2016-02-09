@@ -25,8 +25,8 @@ install:
  - cabal install --only-dependencies --enable-tests
 
 script:
- - cabal configure --enable-tests
- - cabal build
+ - cabal configure --enable-tests --verbose
+ - ./scripts/travis_long cabal build --verbose
  - cabal test --show-details=always
 
  # Verify that the sdist builds.
@@ -36,8 +36,8 @@ script:
 
  # Ensure that the examples build
  - pushd examples
- - cabal configure
- - cabal build
+ - cabal configure --verbose
+ - cabal build --verbose
  - popd
 
 notifications:
