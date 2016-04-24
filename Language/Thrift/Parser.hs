@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 -- |
 -- Module      :  Language.Thrift.Parser
--- Copyright   :  (c) Abhinav Gupta 2015
+-- Copyright   :  (c) Abhinav Gupta 2016
 -- License     :  BSD3
 --
 -- Maintainer  :  Abhinav Gupta <mail@abhinavg.net>
