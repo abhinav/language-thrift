@@ -14,8 +14,8 @@ import Text.Megaparsec (SourcePos, eof, skipMany, spaceChar)
 
 import TestUtils
 
+import qualified Language.Thrift.AST    as T
 import qualified Language.Thrift.Parser as P
-import qualified Language.Thrift.Types  as T
 
 spec :: Spec
 spec = describe "Parser" $ do

@@ -73,8 +73,8 @@ import Text.PrettyPrint.ANSI.Leijen (Doc, Pretty (..), align, bold, cyan,
                                      linebreak, magenta, nest, plain, space,
                                      vsep, yellow, (<$$>), (<$>), (<+>), (<>))
 
-import qualified Language.Thrift.Internal.Types as T
-import qualified Text.PrettyPrint.ANSI.Leijen   as P
+import qualified Language.Thrift.Internal.AST as T
+import qualified Text.PrettyPrint.ANSI.Leijen as P
 
 -- | Configuration for the pretty printer.
 data Config = Config

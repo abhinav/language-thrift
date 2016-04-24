@@ -17,7 +17,7 @@ import Test.QuickCheck
 
 import qualified Data.Text as Text
 
-import qualified Language.Thrift.Types as T
+import qualified Language.Thrift.AST as T
 
 #ifdef MIN_VERSION_QuickCheck
 #if !MIN_VERSION_QuickCheck(2, 8, 0)

@@ -24,6 +24,7 @@ source-repository head
 
 library
     exposed-modules:
+        Language.Thrift.AST
         Language.Thrift.Parser
         Language.Thrift.Pretty
         Language.Thrift.Types
@@ -35,7 +36,7 @@ library
         transformers -any
     default-language: Haskell2010
     other-modules:
-        Language.Thrift.Internal.Types
+        Language.Thrift.Internal.AST
     ghc-options: -Wall
 
 test-suite spec
@@ -55,7 +56,7 @@ test-suite spec
     other-modules:
         Language.Thrift.Arbitrary
         Language.Thrift.ParserSpec
-        Language.Thrift.TypesSpec
+        Language.Thrift.ASTSpec
         Spec
         TestUtils
     ghc-options: -Wall

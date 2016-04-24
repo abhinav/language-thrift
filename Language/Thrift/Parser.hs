@@ -71,7 +71,7 @@ import qualified Data.Text                 as Text
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Lexer     as PL
 
-import qualified Language.Thrift.Types as T
+import qualified Language.Thrift.AST as T
 
 -- | Keeps track of the last docstring seen by the system so that we can
 -- attach it to entities.

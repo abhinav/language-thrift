@@ -26,7 +26,7 @@ import qualified Data.Text as Text
 
 import Language.Thrift.Parser (parse)
 
-import qualified Language.Thrift.Types as T
+import qualified Language.Thrift.AST as T
 
 die :: String -> IO a
 die s = hPutStrLn stderr s >> exitFailure

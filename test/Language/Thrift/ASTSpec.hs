@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Language.Thrift.TypesSpec (spec) where
+module Language.Thrift.ASTSpec (spec) where
 
 import Control.Monad         (void)
 import Test.Hspec

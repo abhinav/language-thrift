@@ -5,7 +5,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE RankNTypes             #-}
-module Language.Thrift.Internal.Types
+module Language.Thrift.Internal.AST
     (
     -- * AST
 
