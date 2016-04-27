@@ -1,0 +1,47 @@
+---
+name: language-thrift
+version: 0.8.0.0
+license: BSD3
+author: Abhinav Gupta
+maintainer: Abhinav Gupta <mail@abhinavg.net>
+github: abhinav/language-thrift
+category: Language
+synopsis: Parser and pretty printer for the Thrift IDL format.
+description: |
+    This package provides a parser and pretty printer for the
+    <http://thrift.apache.org/docs/idl Thrift IDL format>.
+
+extra-source-files:
+  - CHANGES.md
+  - examples/generateHaskellTypes.hs
+  - examples/reformatIDL.hs
+  - README.md
+  - test/data/*.txt
+
+ghc-options: -Wall
+
+dependencies:
+  - base >= 4.7 && < 4.9
+  - ansi-wl-pprint >= 0.6 && < 0.7
+  - megaparsec >= 4.0 && < 5.0
+  - text >= 1.2
+
+library:
+  source-dirs: src
+  dependencies:
+    - transformers
+  exposed-modules:
+    - Language.Thrift.AST
+    - Language.Thrift.Parser
+    - Language.Thrift.Pretty
+    - Language.Thrift.Types
+
+tests:
+  spec:
+    source-dirs: test
+    main: Main.hs
+    dependencies:
+      - hspec >= 2.0
+      - hspec-discover >= 2.1
+      - language-thrift
+      - QuickCheck >= 2.5
