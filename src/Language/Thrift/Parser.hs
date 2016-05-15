@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
 -- |
 -- Module      :  Language.Thrift.Parser
 -- Copyright   :  (c) Abhinav Gupta 2016
@@ -64,10 +65,12 @@ module Language.Thrift.Parser
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.State (StateT)
+import Data.Scientific           (floatingOrInteger)
 import Data.Text                 (Text)
 
 import qualified Control.Monad.Trans.State as State
 import qualified Data.Text                 as Text
+import qualified Data.Text.IO              as Text
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Lexer     as PL
 
@@ -81,47 +84,53 @@ data State = State
     deriving (Show, Eq)
 
 -- | Underlying Parser type.
-type Parser s = StateT State (P.Parsec s)
+type Parser s = StateT State (P.Parsec P.Dec s)
 
 -- | Evaluates the underlying parser with a default state and get the Megaparsec
 -- parser.
-runParser :: Parser s a -> P.Parsec s a
+runParser
+    :: (P.Stream s, P.Token s ~ Char)
+    => Parser s a -> P.Parsec P.Dec s a
 runParser p = State.evalStateT p (State Nothing)
 
 -- | Parses the Thrift file at the given path.
-parseFromFile :: FilePath -> IO (Either P.ParseError (T.Program P.SourcePos))
-parseFromFile =
-    P.parseFromFile (thriftIDL :: P.Parsec Text (T.Program P.SourcePos))
+parseFromFile
+    :: FilePath
+    -> IO (Either (P.ParseError Char P.Dec) (T.Program P.SourcePos))
+parseFromFile path = P.runParser thriftIDL path <$> Text.readFile path
 
 -- | @parse name contents@ parses the contents of a Thrift document with name
 -- @name@ held in @contents@.
 parse
-    :: P.Stream s Char
-    => FilePath -> s -> Either P.ParseError (T.Program P.SourcePos)
+    :: (P.Stream s, P.Token s ~ Char)
+    => FilePath
+    -> s -> Either (P.ParseError Char P.Dec) (T.Program P.SourcePos)
 parse = P.parse thriftIDL
 
 -- | Megaparsec parser that is able to parse full Thrift documents.
-thriftIDL :: P.Stream s Char => P.Parsec s (T.Program P.SourcePos)
+thriftIDL
+    :: (P.Stream s, P.Token s ~ Char)
+    => P.Parsec P.Dec s (T.Program P.SourcePos)
 thriftIDL = runParser program
 
 
-clearDocstring :: Parser s ()
+clearDocstring :: P.Stream s => Parser s ()
 clearDocstring = State.modify' (\s -> s { stateDocstring = Nothing })
 
 
 -- | Returns the last docstring recorded by the parser and forgets about it.
-lastDocstring :: Parser s T.Docstring
+lastDocstring :: P.Stream s => Parser s T.Docstring
 lastDocstring = do
     s <- State.gets stateDocstring
     clearDocstring
     return s
 
 -- | Optional whitespace.
-whiteSpace :: P.Stream s Char => Parser s ()
+whiteSpace :: (P.Stream s, P.Token s ~ Char) => Parser s ()
 whiteSpace = someSpace <|> pure ()
 
 -- | Required whitespace.
-someSpace :: P.Stream s Char => Parser s ()
+someSpace :: (P.Stream s, P.Token s ~ Char) => Parser s ()
 someSpace = P.skipSome $ readDocstring <|> skipComments <|> skipSpace
   where
     readDocstring = do
@@ -143,14 +152,23 @@ someSpace = P.skipSome $ readDocstring <|> skipComments <|> skipSpace
     skipLine = void P.eol <|> P.eof <|> (P.anyChar *> skipLine)
 
     skipCStyleComment = P.choice
-      [ P.try (P.string "*/")      *> pure ()
-      , P.skipSome (P.noneOf "/*") *> skipCStyleComment
-      , P.oneOf "/*"               *> skipCStyleComment
+      [ P.try (P.string "*/")    *> pure ()
+      , P.skipSome (noneOf "/*") *> skipCStyleComment
+      , oneOf "/*"               *> skipCStyleComment
       ]
+
+oneOf :: (P.Stream s, P.Token s ~ Char) => String -> Parser s Char
+oneOf = P.oneOf
+{-# INLINE oneOf #-}
+
+noneOf :: (P.Stream s, P.Token s ~ Char) => String -> Parser s Char
+noneOf = P.noneOf
+{-# INLINE noneOf #-}
 
 -- | @p `skipUpTo` n@ skips @p@ @n@ times or until @p@ stops matching --
 -- whichever comes first.
-skipUpTo :: P.Stream s Char => Parser s a -> Int -> Parser s ()
+skipUpTo
+    :: (P.Stream s, P.Token s ~ Char) => Parser s a -> Int -> Parser s ()
 skipUpTo p = loop
   where
     loop 0 = return ()
@@ -160,8 +178,8 @@ skipUpTo p = loop
             loop $! n - 1
         ) <|> return ()
 
-hspace :: P.Stream s Char => Parser s ()
-hspace = void $ P.oneOf " \t"
+hspace :: (P.Stream s, P.Token s ~ Char) => Parser s ()
+hspace = void $ oneOf " \t"
 
 -- | A javadoc-style docstring.
 --
@@ -172,10 +190,10 @@ hspace = void $ P.oneOf " \t"
 -- This parses attempts to preserve indentation inside the docstring while
 -- getting rid of the aligned @*@s (if any) and any other preceding space.
 --
-docstring :: P.Stream s Char => Parser s Text
+docstring :: (P.Stream s, P.Token s ~ Char) => Parser s Text
 docstring = do
     P.try (P.string "/**") >> P.skipMany hspace
-    indent <- P.sourceColumn <$> P.getPosition
+    indent <- fromIntegral . P.unPos <$> PL.indentLevel
     isNewLine <- maybeEOL
     chunks <- loop isNewLine (indent - 1) []
     return $! Text.intercalate "\n" chunks
@@ -183,7 +201,7 @@ docstring = do
     maybeEOL = (P.eol >> return True) <|> return False
 
     commentChar =
-        P.noneOf "*\r\n" <|>
+        noneOf "*\r\n" <|>
         P.try (P.char '*' <* P.notFollowedBy (P.char '/'))
 
     loop shouldDedent maxDedent chunks = do
@@ -220,19 +238,20 @@ docstring = do
             loop True maxDedent (line:chunks)
 
 
-symbolic :: P.Stream s Char => Char -> Parser s ()
+symbolic :: (P.Stream s, P.Token s ~ Char) => Char -> Parser s ()
 symbolic c = void $ PL.symbol whiteSpace [c]
 
-token :: P.Stream s Char => Parser s a -> Parser s a
+token :: (P.Stream s, P.Token s ~ Char) => Parser s a -> Parser s a
 token = PL.lexeme whiteSpace
 
-braces, angles, parens :: P.Stream s Char => Parser s a -> Parser s a
+braces, angles, parens
+    :: (P.Stream s, P.Token s ~ Char) => Parser s a -> Parser s a
 
 braces = P.between (symbolic '{') (symbolic '}')
 angles = P.between (symbolic '<') (symbolic '>')
 parens = P.between (symbolic '(') (symbolic ')')
 
-comma, semi, colon, equals :: P.Stream s Char => Parser s ()
+comma, semi, colon, equals :: (P.Stream s, P.Token s ~ Char) => Parser s ()
 
 comma  = symbolic ','
 semi   = symbolic ';'
@@ -241,37 +260,37 @@ equals = symbolic '='
 
 -- | Parses a reserved identifier and adds it to the collection of known
 -- reserved keywords.
-reserved :: P.Stream s Char => String -> Parser s ()
+reserved :: (P.Stream s, P.Token s ~ Char) => String -> Parser s ()
 reserved name = P.label name $ token $ P.try $ do
     void (P.string name)
-    P.notFollowedBy (P.alphaNumChar <|> P.oneOf "_.")
+    P.notFollowedBy (P.alphaNumChar <|> oneOf "_.")
 
 
 -- | A string literal. @"hello"@
-literal :: P.Stream s Char => Parser s Text
+literal :: (P.Stream s, P.Token s ~ Char) => Parser s Text
 literal = P.label "string literal" $ token $
     stringLiteral '"' <|> stringLiteral '\''
 
-stringLiteral :: P.Stream s Char => Char -> Parser s Text
+stringLiteral :: (P.Stream s, P.Token s ~ Char) => Char -> Parser s Text
 stringLiteral q = fmap Text.pack $
     P.char q >> P.manyTill PL.charLiteral (P.char q)
 
 
-integer :: P.Stream s Char => Parser s Integer
+integer :: (P.Stream s, P.Token s ~ Char) => Parser s Integer
 integer = token PL.integer
 
 
 -- | An identifier in a Thrift file.
-identifier :: P.Stream s Char => Parser s Text
+identifier :: (P.Stream s, P.Token s ~ Char) => Parser s Text
 identifier = P.label "identifier" $ token $ do
     name <- (:)
         <$> (P.letterChar <|> P.char '_')
-        <*> many (P.alphaNumChar <|> P.oneOf "_.")
+        <*> many (P.alphaNumChar <|> oneOf "_.")
     return (Text.pack name)
 
 
 -- | Top-level parser to parse complete Thrift documents.
-program :: P.Stream s Char => Parser s (T.Program P.SourcePos)
+program :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Program P.SourcePos)
 program = whiteSpace >>
     T.Program
         <$> many (header     <* optionalSep)
@@ -279,7 +298,7 @@ program = whiteSpace >>
         <*  P.eof
 
 -- | Headers defined for the IDL.
-header :: P.Stream s Char => Parser s (T.Header P.SourcePos)
+header :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Header P.SourcePos)
 header = P.choice
   [ T.HeaderInclude   <$> include
   , T.HeaderNamespace <$> namespace
@@ -292,7 +311,7 @@ header = P.choice
 -- >
 -- > typedef common.Foo Bar
 --
-include :: P.Stream s Char => Parser s (T.Include P.SourcePos)
+include :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Include P.SourcePos)
 include = reserved "include" >> withPosition (T.Include <$> literal)
 
 
@@ -300,7 +319,8 @@ include = reserved "include" >> withPosition (T.Include <$> literal)
 -- name used by the generated code for certain languages.
 --
 -- > namespace py my_service.generated
-namespace :: P.Stream s Char => Parser s (T.Namespace P.SourcePos)
+namespace
+    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Namespace P.SourcePos)
 namespace = P.choice
   [ reserved "namespace" >>
     withPosition (T.Namespace <$> (star <|> identifier) <*> identifier)
@@ -328,7 +348,9 @@ namespace = P.choice
 -- | Convenience wrapper for parsers expecting a position.
 --
 -- The position will be retrieved BEFORE the parser itself is executed.
-withPosition :: P.Stream s Char => Parser s (P.SourcePos -> a) -> Parser s a
+withPosition
+    :: (P.Stream s, P.Token s ~ Char)
+    => Parser s (P.SourcePos -> a) -> Parser s a
 withPosition p = P.getPosition >>= \pos -> p <*> pure pos
 
 
@@ -338,7 +360,7 @@ withPosition p = P.getPosition >>= \pos -> p <*> pure pos
 -- >
 -- > parseFoo = withDocstring $ Foo <$> parseBar
 withDocstring
-    :: P.Stream s Char
+    :: (P.Stream s, P.Token s ~ Char)
     => Parser s (T.Docstring -> P.SourcePos -> a) -> Parser s a
 withDocstring p = lastDocstring >>= \s -> do
     pos <- P.getPosition
@@ -346,7 +368,8 @@ withDocstring p = lastDocstring >>= \s -> do
 
 
 -- | A constant, type, or service definition.
-definition :: P.Stream s Char => Parser s (T.Definition P.SourcePos)
+definition
+    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Definition P.SourcePos)
 definition = whiteSpace >> P.choice
     [ T.ConstDefinition   <$> constant
     , T.TypeDefinition    <$> typeDefinition
@@ -355,7 +378,8 @@ definition = whiteSpace >> P.choice
 
 
 -- | A type definition.
-typeDefinition :: P.Stream s Char => Parser s (T.Type P.SourcePos)
+typeDefinition
+    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Type P.SourcePos)
 typeDefinition = P.choice
     [ T.TypedefType   <$> typedef
     , T.EnumType      <$> enum
@@ -369,7 +393,7 @@ typeDefinition = P.choice
 -- | A typedef is just an alias for another type.
 --
 -- > typedef common.Foo Bar
-typedef :: P.Stream s Char => Parser s (T.Typedef P.SourcePos)
+typedef :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Typedef P.SourcePos)
 typedef = reserved "typedef" >> withDocstring
     (T.Typedef <$> typeReference <*> identifier <*> typeAnnotations)
 
@@ -378,8 +402,8 @@ typedef = reserved "typedef" >> withDocstring
 --
 -- > enum Role {
 -- >     User = 1, Admin
--- > }
-enum :: P.Stream s Char => Parser s (T.Enum P.SourcePos)
+-- >
+enum :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Enum P.SourcePos)
 enum = reserved "enum" >> withDocstring
     ( T.Enum
         <$> identifier
@@ -394,7 +418,7 @@ enum = reserved "enum" >> withDocstring
 -- >     1: string name
 -- >     2: Role role = Role.User;
 -- > }
-struct :: P.Stream s Char => Parser s (T.Struct P.SourcePos)
+struct :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
 struct = reserved "struct" >> withDocstring
     ( T.Struct
         <$> identifier
@@ -409,7 +433,7 @@ struct = reserved "struct" >> withDocstring
 -- >     1: string stringValue;
 -- >     2: i32 intValue;
 -- > }
-union :: P.Stream s Char => Parser s (T.Union P.SourcePos)
+union :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Union P.SourcePos)
 union = reserved "union" >> withDocstring
     ( T.Union
         <$> identifier
@@ -424,7 +448,8 @@ union = reserved "union" >> withDocstring
 -- >     1: optional string message
 -- >     2: required string username
 -- > }
-exception :: P.Stream s Char => Parser s (T.Exception P.SourcePos)
+exception
+    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Exception P.SourcePos)
 exception = reserved "exception" >> withDocstring
     ( T.Exception
         <$> identifier
@@ -434,7 +459,8 @@ exception = reserved "exception" >> withDocstring
 
 
 -- | Whether a field is @required@ or @optional@.
-fieldRequiredness :: P.Stream s Char => Parser s T.FieldRequiredness
+fieldRequiredness
+    :: (P.Stream s, P.Token s ~ Char) => Parser s T.FieldRequiredness
 fieldRequiredness = P.choice
   [ reserved "required" *> pure T.Required
   , reserved "optional" *> pure T.Optional
@@ -442,7 +468,7 @@ fieldRequiredness = P.choice
 
 
 -- | A struct field.
-field :: P.Stream s Char => Parser s (T.Field P.SourcePos)
+field :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Field P.SourcePos)
 field = withDocstring $
   T.Field
     <$> optional (integer <* colon)
@@ -455,7 +481,7 @@ field = withDocstring $
 
 
 -- | A value defined inside an @enum@.
-enumDef :: P.Stream s Char => Parser s (T.EnumDef P.SourcePos)
+enumDef :: (P.Stream s, P.Token s ~ Char) => Parser s (T.EnumDef P.SourcePos)
 enumDef = withDocstring $
   T.EnumDef
     <$> identifier
@@ -466,7 +492,7 @@ enumDef = withDocstring $
 
 -- | An string-only enum. These are a deprecated feature of Thrift and shouldn't
 -- be used.
-senum :: P.Stream s Char => Parser s (T.Senum P.SourcePos)
+senum :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Senum P.SourcePos)
 senum = reserved "senum" >> withDocstring
     ( T.Senum
         <$> identifier
@@ -478,7 +504,7 @@ senum = reserved "senum" >> withDocstring
 -- | A 'const' definition.
 --
 -- > const i32 code = 1;
-constant :: P.Stream s Char => Parser s (T.Const P.SourcePos)
+constant :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Const P.SourcePos)
 constant = do
   reserved "const"
   withDocstring $
@@ -490,19 +516,23 @@ constant = do
 
 
 -- | A constant value literal.
-constantValue :: P.Stream s Char => Parser s (T.ConstValue P.SourcePos)
+constantValue
+    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.ConstValue P.SourcePos)
 constantValue = withPosition $ P.choice
   [ P.try (P.string "0x") >> T.ConstInt <$> token PL.hexadecimal
-  , either T.ConstInt T.ConstFloat
-                      <$> token (PL.signed whiteSpace PL.number)
+  , either T.ConstFloat T.ConstInt
+                      <$> token signedNumber
   , T.ConstLiteral    <$> literal
   , T.ConstIdentifier <$> identifier
   , T.ConstList       <$> constList
   , T.ConstMap        <$> constMap
   ]
+  where
+    signedNumber = floatingOrInteger <$> PL.signed whiteSpace PL.number
 
 
-constList :: P.Stream s Char => Parser s [T.ConstValue P.SourcePos]
+constList
+    :: (P.Stream s, P.Token s ~ Char) => Parser s [T.ConstValue P.SourcePos]
 constList = symbolic '[' *> loop []
   where
     loop xs = P.choice
@@ -514,7 +544,7 @@ constList = symbolic '[' *> loop []
 
 
 constMap
-    :: P.Stream s Char
+    :: (P.Stream s, P.Token s ~ Char)
     => Parser s [(T.ConstValue P.SourcePos, T.ConstValue P.SourcePos)]
 constMap = symbolic '{' *> loop []
   where
@@ -527,7 +557,7 @@ constMap = symbolic '{' *> loop []
 
 
 constantValuePair
-    :: P.Stream s Char
+    :: (P.Stream s, P.Token s ~ Char)
     => Parser s (T.ConstValue P.SourcePos, T.ConstValue P.SourcePos)
 constantValuePair =
     (,) <$> (constantValue <* colon)
@@ -535,7 +565,9 @@ constantValuePair =
 
 
 -- | A reference to a built-in or defined field.
-typeReference :: P.Stream s Char => Parser s (T.TypeReference P.SourcePos)
+typeReference
+    :: (P.Stream s, P.Token s ~ Char)
+    => Parser s (T.TypeReference P.SourcePos)
 typeReference = P.choice
   [ baseType
   , containerType
@@ -544,7 +576,8 @@ typeReference = P.choice
 
 
 baseType
-    :: P.Stream s Char => Parser s (T.TypeReference P.SourcePos)
+    :: (P.Stream s, P.Token s ~ Char)
+    => Parser s (T.TypeReference P.SourcePos)
 baseType = withPosition $
     P.choice [reserved s *> (v <$> typeAnnotations) | (s, v) <- bases]
   where
@@ -563,7 +596,8 @@ baseType = withPosition $
 
 
 containerType
-    :: P.Stream s Char => Parser s (T.TypeReference P.SourcePos)
+    :: (P.Stream s, P.Token s ~ Char)
+    => Parser s (T.TypeReference P.SourcePos)
 containerType = withPosition $
     P.choice [mapType, setType, listType] <*> typeAnnotations
   where
@@ -578,7 +612,7 @@ containerType = withPosition $
 -- > service MyService {
 -- >     // ...
 -- > }
-service :: P.Stream s Char => Parser s (T.Service P.SourcePos)
+service :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Service P.SourcePos)
 service = do
   reserved "service"
   withDocstring $
@@ -593,7 +627,8 @@ service = do
 --
 -- > Foo getFoo() throws (1: FooDoesNotExist doesNotExist);
 -- > oneway void putBar(1: Bar bar);
-function :: P.Stream s Char => Parser s (T.Function P.SourcePos)
+function
+    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Function P.SourcePos)
 function = withDocstring $
     T.Function
         <$> ((reserved "oneway" *> pure True) <|> pure False)
@@ -611,16 +646,17 @@ function = withDocstring $
 --
 -- These do not usually affect code generation but allow for custom logic if
 -- writing your own code generator.
-typeAnnotations :: P.Stream s Char => Parser s [T.TypeAnnotation]
+typeAnnotations
+    :: (P.Stream s, P.Token s ~ Char) => Parser s [T.TypeAnnotation]
 typeAnnotations = parens (many typeAnnotation) <|> pure []
 
 
-typeAnnotation :: P.Stream s Char => Parser s T.TypeAnnotation
+typeAnnotation :: (P.Stream s, P.Token s ~ Char) => Parser s T.TypeAnnotation
 typeAnnotation =
     T.TypeAnnotation
         <$> identifier
         <*> (optional (equals *> literal) <* optionalSep)
 
 
-optionalSep :: P.Stream s Char => Parser s ()
+optionalSep :: (P.Stream s, P.Token s ~ Char) => Parser s ()
 optionalSep = void $ optional (comma <|> semi)
