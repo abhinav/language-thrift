@@ -1,0 +1,19 @@
+---
+name: language-thrift-examples
+version: 0.1.0.0
+license: BSD3
+author: Abhinav Gupta
+maintainer: Abhinav Gupta <mail@abhinavg.net>
+
+dependencies:
+  - base >= 4.7 && < 4.9
+  - ansi-wl-pprint
+  - language-thrift
+
+executables:
+  reformatIDL:
+    main: reformatIDL.hs
+  generateHaskellTypes:
+    main: generateHaskellTypes.hs
+    dependencies:
+      - text

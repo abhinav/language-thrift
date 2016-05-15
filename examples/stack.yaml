@@ -2,5 +2,6 @@ flags: {}
 packages:
     - '.'
     - '../'
-extra-deps: []
-resolver: lts-4.0
+extra-deps:
+- megaparsec-5.0.0
+resolver: lts-5.11
