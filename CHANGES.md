@@ -1,4 +1,4 @@
-0.9.0.0 (unreleased)
+0.9.0.0 (2016-05-15)
 ====================
 
 - Deprecate the `Language.Thrift.Types` in favor of `Language.Thrift.AST`.
