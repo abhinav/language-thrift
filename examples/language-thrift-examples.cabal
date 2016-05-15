@@ -13,7 +13,7 @@ author:         Abhinav Gupta
 executable generateHaskellTypes
     main-is: generateHaskellTypes.hs
     build-depends:
-        base >= 4.7 && < 4.9,
+        base,
         ansi-wl-pprint,
         language-thrift,
         text
@@ -22,7 +22,7 @@ executable generateHaskellTypes
 executable reformatIDL
     main-is: reformatIDL.hs
     build-depends:
-        base >= 4.7 && < 4.9,
+        base,
         ansi-wl-pprint,
         language-thrift
     default-language: Haskell2010

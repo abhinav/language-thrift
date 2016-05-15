@@ -34,7 +34,7 @@ library
         src
     ghc-options: -Wall
     build-depends:
-        base >= 4.7 && < 4.9,
+        base >= 4.7 && < 5,
         ansi-wl-pprint >= 0.6 && < 0.7,
         megaparsec >= 5.0 && < 6.0,
         text >= 1.2,
@@ -58,7 +58,7 @@ test-suite spec
         test
     ghc-options: -Wall
     build-depends:
-        base >= 4.7 && < 4.9,
+        base >= 4.7 && < 5,
         ansi-wl-pprint >= 0.6 && < 0.7,
         megaparsec >= 5.0 && < 6.0,
         text >= 1.2,
