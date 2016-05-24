@@ -3,7 +3,7 @@
 -- see: https://github.com/sol/hpack
 
 name:           language-thrift
-version:        0.8.0.0
+version:        0.8.0.1
 cabal-version:  >= 1.10
 build-type:     Simple
 license:        BSD3
