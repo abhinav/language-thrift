@@ -4,6 +4,11 @@
 - Deprecate the `Language.Thrift.Types` in favor of `Language.Thrift.AST`.
 - Upgrade to `megaparsec` 5.0.
 
+0.8.0.1 (2016-05-24)
+====================
+
+-   Build with GHC 8.
+
 0.8.0.0 (2016-02-09)
 ====================
 
