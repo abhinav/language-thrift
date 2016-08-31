@@ -29,6 +29,7 @@ dependencies:
 library:
   source-dirs: src
   dependencies:
+    - containers >= 0.5 && < 0.6
     - transformers
   exposed-modules:
     - Language.Thrift.Parser
