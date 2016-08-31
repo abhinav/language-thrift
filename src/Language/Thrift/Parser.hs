@@ -64,14 +64,14 @@ module Language.Thrift.Parser
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.State (StateT)
-import Data.Set                  (Set)
 import Data.Text                 (Text)
 
 import qualified Control.Monad.Trans.State as State
-import qualified Data.Set                  as Set
 import qualified Data.Text                 as Text
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Lexer     as PL
+
+import Language.Thrift.Internal.Reserved (isReserved)
 
 import qualified Language.Thrift.Types as T
 
@@ -245,7 +245,7 @@ equals = symbolic '='
 -- reservedKeywords list. If it's not, we have a bug and we should crash.
 errorUnlessReserved :: Monad m => String -> m ()
 errorUnlessReserved name =
-    unless (name `Set.member` reservedKeywords) $
+    unless (isReserved name) $
         error ("reserved called with unreserved identifier " ++ show name)
 
 -- | Parses a reserved identifier and adds it to the collection of known
@@ -277,7 +277,7 @@ identifier = P.label "identifier" $ token $ do
     name <- (:)
         <$> (P.letterChar <|> P.char '_')
         <*> many (P.alphaNumChar <|> P.oneOf "_.")
-    when (name `Set.member` reservedKeywords) $
+    when (isReserved name) $
         P.unexpected name
     return (Text.pack name)
 
@@ -636,44 +636,3 @@ typeAnnotation =
 
 optionalSep :: P.Stream s Char => Parser s ()
 optionalSep = void $ optional (comma <|> semi)
-
-reservedKeywords :: Set String
-reservedKeywords = Set.fromList
-    [ "include"
-    , "namespace"
-    , "cpp_namespace"
-    , "php_namespace"
-    , "py_module"
-    , "perl_package"
-    , "ruby_namespace"
-    , "java_package"
-    , "cocoa_package"
-    , "csharp_namespace"
-    , "typedef"
-    , "enum"
-    , "struct"
-    , "union"
-    , "exception"
-    , "required"
-    , "optional"
-    , "senum"
-    , "const"
-    , "string"
-    , "binary"
-    , "slist"
-    , "bool"
-    , "byte"
-    , "i8"
-    , "i16"
-    , "i32"
-    , "i64"
-    , "double"
-    , "map"
-    , "set"
-    , "list"
-    , "service"
-    , "extends"
-    , "oneway"
-    , "void"
-    , "throws"
-    ]
