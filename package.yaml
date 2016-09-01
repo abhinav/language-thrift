@@ -23,14 +23,15 @@ ghc-options: -Wall
 dependencies:
   - base >= 4.7 && < 5
   - ansi-wl-pprint >= 0.6 && < 0.7
+  - containers >= 0.5 && < 0.6
   - megaparsec >= 5.0 && < 6.0
+  - scientific >= 0.3 && < 0.4
+  - semigroups >= 0.18 && < 0.19
   - text >= 1.2
+  - transformers
 
 library:
   source-dirs: src
-  dependencies:
-    - scientific >= 0.3 && < 0.4
-    - transformers
   exposed-modules:
     - Language.Thrift.AST
     - Language.Thrift.Parser
@@ -39,7 +40,7 @@ library:
 
 tests:
   spec:
-    source-dirs: test
+    source-dirs: [src, test]
     main: Main.hs
     dependencies:
       - hspec >= 2.0

@@ -80,6 +80,13 @@ testParseFailure = do
         , "something_else<foo>"
         ]
 
+    it "cannot parse reserved keywords in names" $
+        parseFailureCases P.program
+            [ "enum struct {}"
+            , "strut Foo { 1: required string service }"
+            ]
+
+
 parseFailureCases :: Show a => Parser a -> [String] -> Expectation
 parseFailureCases p = mapM_ (p `shouldNotParse`)
 

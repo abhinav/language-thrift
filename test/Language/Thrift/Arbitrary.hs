@@ -17,6 +17,8 @@ import Test.QuickCheck
 
 import qualified Data.Text as Text
 
+import Language.Thrift.Internal.Reserved (isReserved)
+
 import qualified Language.Thrift.AST as T
 
 #ifdef MIN_VERSION_QuickCheck
@@ -64,6 +66,15 @@ instance Arbitrary Docstring where
 
     shrink (Docstring t) = Docstring <$> shrink t
 
+newtype Identifier = Identifier { getIdentifier :: Text }
+    deriving (Show, Typeable, Generic)
+
+instance Arbitrary Identifier where
+    arbitrary = Identifier <$> arbitrary `suchThat` (not . isReserved . Text.unpack)
+
+    shrink (Identifier t) =
+        [Identifier t' | t' <- shrink t, not (isReserved (Text.unpack t'))]
+
 ------------------------------------------------------------------------------
 
 instance Arbitrary (T.Program ()) where
@@ -83,7 +94,11 @@ instance Arbitrary (T.Include ()) where
 
 instance Arbitrary (T.Namespace ()) where
     shrink = genericShrink
-    arbitrary = T.Namespace <$> elements scopes <*> arbitrary <*> pure ()
+    arbitrary =
+        T.Namespace
+            <$> elements scopes
+            <*> (getIdentifier <$> arbitrary)
+            <*> pure ()
       where
         scopes = ["*", "py", "rb", "java", "hs", "cpp"]
 
@@ -101,7 +116,7 @@ instance Arbitrary (T.Const ()) where
     arbitrary =
         T.Const
             <$> arbitrary
-            <*> arbitrary
+            <*> (getIdentifier <$> arbitrary)
             <*> arbitrary
             <*> (getDocstring <$> arbitrary)
             <*> pure ()
@@ -110,8 +125,11 @@ instance Arbitrary (T.Service ()) where
     shrink = genericShrink
     arbitrary =
         T.Service
-            <$> arbitrary
-            <*> arbitrary
+            <$> (getIdentifier <$> arbitrary)
+            <*> frequency
+                    [ (1, return Nothing)
+                    , (3, Just . getIdentifier <$> arbitrary)
+                    ]
             <*> arbitrary
             <*> halfSize arbitrary
             <*> (getDocstring <$> arbitrary)
@@ -123,7 +141,7 @@ instance Arbitrary (T.Function ()) where
         T.Function
             <$> arbitrary
             <*> halfSize arbitrary
-            <*> arbitrary
+            <*> (getIdentifier <$> arbitrary)
             <*> halfSize arbitrary
             <*> halfSize arbitrary
             <*> halfSize arbitrary
@@ -145,7 +163,7 @@ instance Arbitrary (T.Typedef ()) where
     shrink = genericShrink
     arbitrary = T.Typedef
         <$> arbitrary
-        <*> arbitrary
+        <*> (getIdentifier <$> arbitrary)
         <*> halfSize arbitrary
         <*> (getDocstring <$> arbitrary)
         <*> pure ()
@@ -153,7 +171,7 @@ instance Arbitrary (T.Typedef ()) where
 instance Arbitrary (T.Enum ()) where
     shrink = genericShrink
     arbitrary = T.Enum
-        <$> arbitrary
+        <$> (getIdentifier <$> arbitrary)
         <*> arbitrary
         <*> halfSize arbitrary
         <*> (getDocstring <$> arbitrary)
@@ -163,7 +181,7 @@ instance Arbitrary (T.EnumDef ()) where
     shrink = genericShrink
     arbitrary =
         T.EnumDef
-            <$> arbitrary
+            <$> (getIdentifier <$> arbitrary)
             <*> arbitrary
             <*> halfSize arbitrary
             <*> (getDocstring <$> arbitrary)
@@ -172,7 +190,7 @@ instance Arbitrary (T.EnumDef ()) where
 instance Arbitrary (T.Struct ()) where
     shrink = genericShrink
     arbitrary = T.Struct
-        <$> arbitrary
+        <$> (getIdentifier <$> arbitrary)
         <*> arbitrary
         <*> halfSize arbitrary
         <*> (getDocstring <$> arbitrary)
@@ -181,7 +199,7 @@ instance Arbitrary (T.Struct ()) where
 instance Arbitrary (T.Union ()) where
     shrink = genericShrink
     arbitrary = T.Union
-        <$> arbitrary
+        <$> (getIdentifier <$> arbitrary)
         <*> arbitrary
         <*> halfSize arbitrary
         <*> (getDocstring <$> arbitrary)
@@ -190,7 +208,7 @@ instance Arbitrary (T.Union ()) where
 instance Arbitrary (T.Exception ()) where
     shrink = genericShrink
     arbitrary = T.Exception
-        <$> arbitrary
+        <$> (getIdentifier <$> arbitrary)
         <*> arbitrary
         <*> halfSize arbitrary
         <*> (getDocstring <$> arbitrary)
@@ -199,7 +217,7 @@ instance Arbitrary (T.Exception ()) where
 instance Arbitrary (T.Senum ()) where
     shrink = genericShrink
     arbitrary = T.Senum
-        <$> arbitrary
+        <$> (getIdentifier <$> arbitrary)
         <*> arbitrary
         <*> halfSize arbitrary
         <*> (getDocstring <$> arbitrary)
@@ -212,7 +230,7 @@ instance Arbitrary (T.Field ()) where
             <$> (fmap getPositive <$> arbitrary)
             <*> arbitrary
             <*> halfSize arbitrary
-            <*> arbitrary
+            <*> (getIdentifier <$> arbitrary)
             <*> halfSize arbitrary
             <*> halfSize arbitrary
             <*> (getDocstring <$> arbitrary)
@@ -221,7 +239,8 @@ instance Arbitrary (T.Field ()) where
 instance Arbitrary (T.TypeReference ()) where
     shrink = genericShrink
     arbitrary = oneof
-        [ T.DefinedType           <$> arbitrary <*> pure ()
+        [ T.DefinedType           <$> (getIdentifier <$> arbitrary)
+                                  <*> pure ()
         , halfSize $ T.StringType <$> arbitrary <*> pure ()
         , halfSize $ T.BinaryType <$> arbitrary <*> pure ()
         , halfSize $ T.SListType  <$> arbitrary <*> pure ()
@@ -242,7 +261,7 @@ instance Arbitrary T.FieldRequiredness where
 
 instance Arbitrary T.TypeAnnotation where
     shrink = genericShrink
-    arbitrary = T.TypeAnnotation <$> arbitrary <*> arbitrary
+    arbitrary = T.TypeAnnotation <$> (getIdentifier <$> arbitrary) <*> arbitrary
 
 
 newtype BasicConstValue = BasicConstValue {
@@ -256,7 +275,8 @@ instance Arbitrary BasicConstValue where
         [ T.ConstFloat      <$> choose (0.0, 10000.0) <*> pure ()
         , T.ConstInt        <$> arbitrary <*> pure ()
         , T.ConstLiteral    <$> arbitrary <*> pure ()
-        , T.ConstIdentifier <$> arbitrary <*> pure ()
+        , T.ConstIdentifier <$> (getIdentifier <$> arbitrary)
+                            <*> pure ()
         ]
 
 -- | newtype wrapper around const values so that we're not generating lists

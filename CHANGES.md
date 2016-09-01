@@ -1,3 +1,8 @@
+0.9.0.2 (unreleased)
+====================
+
+-   Disallow reserved keywords from being used as identifier names.
+
 0.9.0.1 (2016-05-26)
 ====================
 
@@ -8,6 +13,11 @@
 
 - Deprecate the `Language.Thrift.Types` in favor of `Language.Thrift.AST`.
 - Upgrade to `megaparsec` 5.0.
+
+0.8.0.2 (2016-08-31)
+====================
+
+-   Disallow reserved keywords from being used as identifier names.
 
 0.8.0.1 (2016-05-24)
 ====================
