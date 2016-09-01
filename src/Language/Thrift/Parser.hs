@@ -69,10 +69,13 @@ import Data.Scientific           (floatingOrInteger)
 import Data.Text                 (Text)
 
 import qualified Control.Monad.Trans.State as State
+import qualified Data.List.NonEmpty        as NonEmpty
 import qualified Data.Text                 as Text
 import qualified Data.Text.IO              as Text
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Lexer     as PL
+
+import Language.Thrift.Internal.Reserved (isReserved)
 
 import qualified Language.Thrift.AST as T
 
@@ -258,12 +261,21 @@ semi   = symbolic ';'
 colon  = symbolic ':'
 equals = symbolic '='
 
+-- | errorUnlessReserved ensures that the given identifier is in the
+-- reservedKeywords list. If it's not, we have a bug and we should crash.
+errorUnlessReserved :: Monad m => String -> m ()
+errorUnlessReserved name =
+    unless (isReserved name) $
+        error ("reserved called with unreserved identifier " ++ show name)
+
 -- | Parses a reserved identifier and adds it to the collection of known
 -- reserved keywords.
 reserved :: (P.Stream s, P.Token s ~ Char) => String -> Parser s ()
-reserved name = P.label name $ token $ P.try $ do
-    void (P.string name)
-    P.notFollowedBy (P.alphaNumChar <|> oneOf "_.")
+reserved name =
+    errorUnlessReserved name >>
+    P.label name $ token $ P.try $ do
+        void (P.string name)
+        P.notFollowedBy (P.alphaNumChar <|> oneOf "_.")
 
 
 -- | A string literal. @"hello"@
@@ -286,6 +298,8 @@ identifier = P.label "identifier" $ token $ do
     name <- (:)
         <$> (P.letterChar <|> P.char '_')
         <*> many (P.alphaNumChar <|> oneOf "_.")
+    when (isReserved name) $
+        P.unexpected (P.Label (NonEmpty.fromList name))
     return (Text.pack name)
 
 
