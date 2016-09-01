@@ -1,4 +1,4 @@
-0.8.0.2 (unreleased)
+0.8.0.2 (2016-08-31)
 ====================
 
 -   Disallow reserved keywords from being used as identifier names.
