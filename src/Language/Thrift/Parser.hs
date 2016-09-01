@@ -71,6 +71,8 @@ import qualified Data.Text                 as Text
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Lexer     as PL
 
+import Language.Thrift.Internal.Reserved (isReserved)
+
 import qualified Language.Thrift.Types as T
 
 -- | Keeps track of the last docstring seen by the system so that we can
@@ -239,13 +241,21 @@ semi   = symbolic ';'
 colon  = symbolic ':'
 equals = symbolic '='
 
+-- | errorUnlessReserved ensures that the given identifier is in the
+-- reservedKeywords list. If it's not, we have a bug and we should crash.
+errorUnlessReserved :: Monad m => String -> m ()
+errorUnlessReserved name =
+    unless (isReserved name) $
+        error ("reserved called with unreserved identifier " ++ show name)
+
 -- | Parses a reserved identifier and adds it to the collection of known
 -- reserved keywords.
 reserved :: P.Stream s Char => String -> Parser s ()
-reserved name = P.label name $ token $ P.try $ do
-    void (P.string name)
-    P.notFollowedBy (P.alphaNumChar <|> P.oneOf "_.")
-
+reserved name =
+    errorUnlessReserved name >>
+    P.label name $ token $ P.try $ do
+        void (P.string name)
+        P.notFollowedBy (P.alphaNumChar <|> P.oneOf "_.")
 
 -- | A string literal. @"hello"@
 literal :: P.Stream s Char => Parser s Text
@@ -267,6 +277,8 @@ identifier = P.label "identifier" $ token $ do
     name <- (:)
         <$> (P.letterChar <|> P.char '_')
         <*> many (P.alphaNumChar <|> P.oneOf "_.")
+    when (isReserved name) $
+        P.unexpected name
     return (Text.pack name)
 
 
