@@ -1,3 +1,10 @@
+0.10.0.0 (unreleased)
+=====================
+
+-   Breaking: Consolidate struct, union, and exception AST types into a single
+    data type: `Struct`. Whether the object is a struct, union, or exception is
+    now determined by the `StructKind` attribute.
+
 0.9.0.2 (2016-08-31)
 ====================
 
@@ -142,4 +149,3 @@ Other changes:
 ====================
 
 -   Initial release.
-

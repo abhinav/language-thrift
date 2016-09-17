@@ -154,8 +154,6 @@ instance Arbitrary (T.Type ()) where
         [ T.TypedefType   <$> arbitrary
         , T.EnumType      <$> arbitrary
         , T.StructType    <$> arbitrary
-        , T.UnionType     <$> arbitrary
-        , T.ExceptionType <$> arbitrary
         , T.SenumType     <$> arbitrary
         ]
 
@@ -187,28 +185,15 @@ instance Arbitrary (T.EnumDef ()) where
             <*> (getDocstring <$> arbitrary)
             <*> pure ()
 
+instance Arbitrary T.StructKind where
+    shrink _ = []
+    arbitrary = elements [T.StructKind, T.UnionKind, T.ExceptionKind]
+
 instance Arbitrary (T.Struct ()) where
     shrink = genericShrink
     arbitrary = T.Struct
-        <$> (getIdentifier <$> arbitrary)
-        <*> arbitrary
-        <*> halfSize arbitrary
-        <*> (getDocstring <$> arbitrary)
-        <*> pure ()
-
-instance Arbitrary (T.Union ()) where
-    shrink = genericShrink
-    arbitrary = T.Union
-        <$> (getIdentifier <$> arbitrary)
-        <*> arbitrary
-        <*> halfSize arbitrary
-        <*> (getDocstring <$> arbitrary)
-        <*> pure ()
-
-instance Arbitrary (T.Exception ()) where
-    shrink = genericShrink
-    arbitrary = T.Exception
-        <$> (getIdentifier <$> arbitrary)
+        <$> arbitrary
+        <*> (getIdentifier <$> arbitrary)
         <*> arbitrary
         <*> halfSize arbitrary
         <*> (getDocstring <$> arbitrary)

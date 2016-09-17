@@ -395,12 +395,10 @@ definition = whiteSpace >> P.choice
 typeDefinition
     :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Type P.SourcePos)
 typeDefinition = P.choice
-    [ T.TypedefType   <$> typedef
-    , T.EnumType      <$> enum
-    , T.SenumType     <$> senum
-    , T.StructType    <$> struct
-    , T.UnionType     <$> union
-    , T.ExceptionType <$> exception
+    [ T.TypedefType <$> typedef
+    , T.EnumType    <$> enum
+    , T.SenumType   <$> senum
+    , T.StructType  <$> struct
     ]
 
 
@@ -426,50 +424,46 @@ enum = reserved "enum" >> withDocstring
     )
 
 
--- | A @struct@.
+-- | A @struct@, @union@, or @exception@.
 --
 -- > struct User {
 -- >     1: string name
 -- >     2: Role role = Role.User;
 -- > }
-struct :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
-struct = reserved "struct" >> withDocstring
-    ( T.Struct
-        <$> identifier
-        <*> braces (many field)
-        <*> typeAnnotations
-    )
-
-
--- | A @union@ of types.
 --
 -- > union Value {
 -- >     1: string stringValue;
 -- >     2: i32 intValue;
 -- > }
-union :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Union P.SourcePos)
-union = reserved "union" >> withDocstring
-    ( T.Union
-        <$> identifier
-        <*> braces (many field)
-        <*> typeAnnotations
-    )
-
-
--- | An @exception@ that can be raised by service methods.
 --
 -- > exception UserDoesNotExist {
 -- >     1: optional string message
 -- >     2: required string username
 -- > }
-exception
-    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Exception P.SourcePos)
-exception = reserved "exception" >> withDocstring
-    ( T.Exception
+struct :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
+struct = kind >>= \k -> withDocstring
+    ( T.Struct k
         <$> identifier
         <*> braces (many field)
         <*> typeAnnotations
     )
+  where
+    kind = P.choice
+        [ reserved "struct"    >> return T.StructKind
+        , reserved "union"     >> return T.UnionKind
+        , reserved "exception" >> return T.ExceptionKind
+        ]
+
+
+-- | A @union@ of types.
+union :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
+union = struct
+{-# DEPRECATED union "Use struct." #-}
+
+-- | An @exception@ that can be raised by service methods.
+exception :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
+exception = struct
+{-# DEPRECATED exception"Use struct." #-}
 
 
 -- | Whether a field is @required@ or @optional@.

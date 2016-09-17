@@ -33,12 +33,6 @@ spec =
         prop "can round-trip structs" $
             roundtrip PP.struct (P.whiteSpace >> P.struct)
 
-        prop "can round-trip unions" $
-            roundtrip PP.union (P.whiteSpace >> P.union)
-
-        prop "can round-trip exceptions" $
-            roundtrip PP.exception (P.whiteSpace >> P.exception)
-
         prop "can round-trip senums" $
             roundtrip PP.senum (P.whiteSpace >> P.senum)
 
