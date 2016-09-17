@@ -28,9 +28,9 @@ matrix:
   # variable, such as using --stack-yaml to point to a different file.
   - env: BUILD=stack ARGS=""
     compiler: ": #stack default"
-    addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
+    addons: {apt: {packages: [ghc-8.0.1], sources: [hvr-ghc]}}
 
-  - env: BUILD=stack ARGS="--resolver lts-5"
+  - env: BUILD=stack ARGS="--resolver lts-6" STACK_YAML=stack-7.10.yaml
     compiler: ": #stack 7.10.3"
     addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
 
@@ -48,7 +48,7 @@ matrix:
     compiler: ": #stack default osx"
     os: osx
 
-  - env: BUILD=stack ARGS="--resolver lts-5"
+  - env: BUILD=stack ARGS="--resolver lts-6" STACK_YAML=stack-7.10.yaml
     compiler: ": #stack 7.10.3 osx"
     os: osx
 
