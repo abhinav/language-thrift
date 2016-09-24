@@ -67,11 +67,34 @@ import Prelude hiding ((<$>))
 import           Data.Text (Text)
 import qualified Data.Text as Text
 
-import Text.PrettyPrint.ANSI.Leijen (Doc, Pretty (..), align, bold, cyan,
-                                     double, dquotes, dullblue, empty, enclose,
-                                     group, hcat, hsep, integer, line,
-                                     linebreak, magenta, nest, plain, space,
-                                     vsep, yellow, (<$$>), (<$>), (<+>), (<>))
+import Text.PrettyPrint.ANSI.Leijen
+    ( Doc
+    , Pretty (..)
+    , align
+    , bold
+    , cyan
+    , double
+    , dquotes
+    , dullblue
+    , empty
+    , enclose
+    , group
+    , hcat
+    , hsep
+    , integer
+    , line
+    , linebreak
+    , magenta
+    , nest
+    , plain
+    , space
+    , vsep
+    , yellow
+    , (<$$>)
+    , (<$>)
+    , (<+>)
+    , (<>)
+    )
 
 import qualified Language.Thrift.Internal.AST as T
 import qualified Text.PrettyPrint.ANSI.Leijen as P
@@ -109,7 +132,7 @@ instance Pretty (T.Program a) where
 
 -- | Print the headers for a program.
 header :: T.Header ann -> Doc
-header (T.HeaderInclude inc) = include inc
+header (T.HeaderInclude inc)  = include inc
 header (T.HeaderNamespace ns) = namespace ns
 
 instance Pretty (T.Header a) where
@@ -130,8 +153,8 @@ instance Pretty (T.Namespace a) where
 
 -- | Print a constant, type, or service definition.
 definition :: Config -> T.Definition ann -> Doc
-definition c (T.ConstDefinition cd) = constant c cd
-definition c (T.TypeDefinition def) = typeDefinition c def
+definition c (T.ConstDefinition cd)  = constant c cd
+definition c (T.TypeDefinition def)  = typeDefinition c def
 definition c (T.ServiceDefinition s) = service c s
 
 instance Pretty (T.Definition a) where
@@ -157,7 +180,7 @@ service c@Config{indentWidth} T.Service{..} =
     typeAnnots c serviceAnnotations
   where
     extends = case serviceExtends of
-      Nothing -> empty
+      Nothing   -> empty
       Just name -> space <> reserved "extends" <+> text name
 
 instance Pretty (T.Service a) where
@@ -193,8 +216,6 @@ typeDefinition c td = case td of
   T.TypedefType   t -> c `typedef`   t
   T.EnumType      t -> c `enum`      t
   T.StructType    t -> c `struct`    t
-  T.UnionType     t -> c `union`     t
-  T.ExceptionType t -> c `exception` t
   T.SenumType     t -> c `senum`     t
 
 instance Pretty (T.Type a) where
@@ -219,30 +240,25 @@ instance Pretty (T.Enum a) where
 
 struct :: Config -> T.Struct ann -> Doc
 struct c@Config{indentWidth} T.Struct{..} = structDocstring $$
-    reserved "struct" <+> declare structName <+>
+    kind <+> declare structName <+>
       block indentWidth line (map (\f -> field c f <> semi) structFields)
     <> typeAnnots c structAnnotations
+  where
+    kind = case structKind of
+        T.StructKind    -> reserved "struct"
+        T.UnionKind     -> reserved "union"
+        T.ExceptionKind -> reserved "exception"
 
 instance Pretty (T.Struct a) where
     pretty = struct defaultConfig
 
-union :: Config -> T.Union ann -> Doc
-union c@Config{indentWidth} T.Union{..} = unionDocstring $$
-    reserved "union" <+> declare unionName <+>
-      block indentWidth line (map (\f -> field c f <> semi) unionFields)
-    <> typeAnnots c unionAnnotations
+union :: Config -> T.Struct ann -> Doc
+union = struct
+{-# DEPRECATED union "Use struct." #-}
 
-instance Pretty (T.Union a) where
-    pretty = union defaultConfig
-
-exception :: Config -> T.Exception ann -> Doc
-exception c@Config{indentWidth} T.Exception{..} = exceptionDocstring $$
-    reserved "exception" <+> declare exceptionName <+>
-      block indentWidth line (map (\f -> field c f <> semi) exceptionFields)
-    <> typeAnnots c exceptionAnnotations
-
-instance Pretty (T.Exception a) where
-    pretty = exception defaultConfig
+exception :: Config -> T.Struct ann -> Doc
+exception = struct
+{-# DEPRECATED exception "Use struct." #-}
 
 senum :: Config -> T.Senum ann -> Doc
 senum c@Config{indentWidth} T.Senum{..} = senumDocstring $$
@@ -395,8 +411,8 @@ block indent s items = enclose lbrace rbrace $
     nest indent (linebreak <> (items `sepBy` s)) <> linebreak
 
 sepBy :: [Doc] -> Doc -> Doc
-sepBy [] _ = empty
-sepBy [x] _ = x
+sepBy [] _     = empty
+sepBy [x] _    = x
 sepBy (x:xs) s = x <> s <> sepBy xs s
 
 encloseSep :: Int -> Doc -> Doc -> Doc -> [Doc] -> Doc
@@ -404,8 +420,8 @@ encloseSep _ left right _ [] = left <> right
 encloseSep _ left right _ [v] = left <> v <> right
 encloseSep indent left right s vs = group $
     nest indent (left <$$> go vs) <$$> right
-  where go [] = empty
-        go [x] = x
+  where go []     = empty
+        go [x]    = x
         go (x:xs) = (x <> s) <$> go xs
 
 lbrace :: Doc

@@ -109,6 +109,21 @@ renderEnum T.Enum{..} = enumDocstring $$
     renderDef T.EnumDef{..} = enumDefDocstring $$ typeName enumDefName
 
 renderStruct :: Show a => T.Struct a -> Doc
+renderStruct s@T.Struct{T.structKind = T.UnionKind, ..} =
+    hang 4
+      (structDocstring $$
+          text "data" <+> typeName structName <$>
+          encloseSep (text "= ") empty (text " | ")
+                     (map renderField structFields))
+    <$$> indent 4 derivingClause
+  where
+    renderField (T.Field _ _ ftype fname _ _ docstring _) =
+        docstring $$ fieldName </> renderTypeReference ftype
+      where
+        fieldName = text . unpack $ Text.concat
+          [ underscoresToCamelCase False structName
+          , underscoresToCamelCase False fname
+          ]
 renderStruct T.Struct{..} = structDocstring $$
     text "data" <+> typeName structName </>
     equals <+> typeName structName <$$>
@@ -121,32 +136,6 @@ renderStruct T.Struct{..} = structDocstring $$
         map (renderStructField $ underscoresToCamelCase True structName)
              structFields
 
-renderException :: Show a => T.Exception a -> Doc
-renderException T.Exception{..} = renderStruct T.Struct
-    { T.structName = exceptionName
-    , T.structFields = exceptionFields
-    , T.structAnnotations = exceptionAnnotations
-    , T.structDocstring = exceptionDocstring
-    , T.structSrcAnnot = exceptionSrcAnnot
-    }
-
-renderUnion :: Show a => T.Union a -> Doc
-renderUnion T.Union{..} =
-    hang 4
-      (unionDocstring $$
-          text "data" <+> typeName unionName <$>
-          encloseSep (text "= ") empty (text " | ")
-                     (map renderField unionFields))
-    <$$> indent 4 derivingClause
-  where
-    renderField (T.Field _ _ ftype fname _ _ docstring _) =
-        docstring $$ fieldName </> renderTypeReference ftype
-      where
-        fieldName = text . unpack $ Text.concat
-          [ underscoresToCamelCase False unionName
-          , underscoresToCamelCase False fname
-          ]
-
 derivingClause :: Doc
 derivingClause =
     text "deriving" <+> tupled (map text ["Show", "Ord", "Eq"])
@@ -154,9 +143,7 @@ derivingClause =
 renderType :: Show a => T.Type a -> Doc
 renderType (T.TypedefType   t) = renderTypedef t
 renderType (T.EnumType      t) = renderEnum t
-renderType (T.ExceptionType t) = renderException t
 renderType (T.StructType    t) = renderStruct t
-renderType (T.UnionType     t) = renderUnion t
 renderType                  t  = error $ "Unsupported type: " ++ show t
 
 typeName :: Text -> Doc

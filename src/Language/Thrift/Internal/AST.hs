@@ -34,9 +34,25 @@ module Language.Thrift.Internal.AST
     , targetType
 
     , Enum(..)
+
+    , StructKind(..)
     , Struct(..)
-    , Union(..)
-    , Exception(..)
+    , kind
+
+    , Union
+    , unionName
+    , unionFields
+    , unionAnnotations
+    , unionDocstring
+    , unionSrcAnnot
+
+    , Exception
+    , exceptionName
+    , exceptionFields
+    , exceptionAnnotations
+    , exceptionDocstring
+    , exceptionSrcAnnot
+
     , Senum(..)
 
     , FieldRequiredness(..)
@@ -73,10 +89,10 @@ module Language.Thrift.Internal.AST
     , HasValueType(..)
     ) where
 
-import Data.Data             (Data, Typeable)
-import Data.Text             (Text)
-import GHC.Generics          (Generic)
-import Prelude               hiding (Enum)
+import Data.Data    (Data, Typeable)
+import Data.Text    (Text)
+import GHC.Generics (Generic)
+import Prelude      hiding (Enum)
 
 import Language.Thrift.Internal.Lens
 
@@ -501,13 +517,32 @@ instance HasDocstring (Enum a) where
 instance HasAnnotations (Enum a) where
     annotations = lens enumAnnotations (\s a -> s { enumAnnotations = a })
 
--- | A struct definition
+-- | The kind of the struct.
+data StructKind
+    = StructKind       -- ^ @struct@
+    | UnionKind        -- ^ @union@
+    | ExceptionKind    -- ^ @exception@
+  deriving (Show, Ord, Eq, Data, Typeable, Generic)
+
+-- | A struct, union, or exception definition.
 --
 -- > struct User {
 -- >     1: Role role = Role.User;
 -- > }
+--
+-- > union Value {
+-- >     1: string stringValue;
+-- >     2: i32 intValue;
+-- > }
+--
+-- > exception UserDoesNotExist {
+-- >     1: optional string message
+-- >     2: required string username
+-- > }
 data Struct srcAnnot = Struct
-    { structName        :: Text
+    { structKind        :: StructKind
+    -- ^ Kind of the structure.
+    , structName        :: Text
     -- ^ Name of the struct.
     , structFields      :: [Field srcAnnot]
     -- ^ Fields defined in the struct.
@@ -518,6 +553,9 @@ data Struct srcAnnot = Struct
     , structSrcAnnot    :: srcAnnot
     }
   deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
+
+kind :: Lens (Struct a) StructKind
+kind = lens structKind (\s a -> s { structKind = a })
 
 instance HasName (Struct a) where
     name = lens structName (\s a -> s { structName = a })
@@ -535,72 +573,52 @@ instance HasAnnotations (Struct a) where
     annotations = lens structAnnotations (\s a -> s { structAnnotations = a })
 
 -- | A union of other types.
---
--- > union Value {
--- >     1: string stringValue;
--- >     2: i32 intValue;
--- > }
-data Union srcAnnot = Union
-    { unionName        :: Text
-    -- ^ Name of the union.
-    , unionFields      :: [Field srcAnnot]
-    -- ^ Fields defined in the union.
-    , unionAnnotations :: [TypeAnnotation]
-    -- ^ Annotations added to the union.
-    , unionDocstring   :: Docstring
-    -- ^ Documentation.
-    , unionSrcAnnot    :: srcAnnot
-    }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
+type Union = Struct
+{-# DEPRECATED Union "The type has been consolidated into Struct." #-}
 
-instance HasName (Union a) where
-    name = lens unionName (\s a -> s { unionName = a })
+unionName :: Union a -> Text
+unionName = structName
+{-# DEPRECATED unionName "Use structName." #-}
 
-instance HasFields Union where
-    fields = lens unionFields (\s a -> s { unionFields = a })
+unionFields :: Union a -> [Field a]
+unionFields = structFields
+{-# DEPRECATED unionFields "Use structFields." #-}
 
-instance HasSrcAnnot Union where
-    srcAnnot = lens unionSrcAnnot (\s a -> s { unionSrcAnnot = a })
+unionAnnotations :: Union a -> [TypeAnnotation]
+unionAnnotations = structAnnotations
+{-# DEPRECATED unionAnnotations "Use structAnnotations." #-}
 
-instance HasDocstring (Union a) where
-    docstring = lens unionDocstring (\s a -> s { unionDocstring = a })
+unionDocstring :: Union a -> Docstring
+unionDocstring = structDocstring
+{-# DEPRECATED unionDocstring "Use structDocstring." #-}
 
-instance HasAnnotations (Union a) where
-    annotations = lens unionAnnotations (\s a -> s { unionAnnotations = a })
+unionSrcAnnot :: Union a -> a
+unionSrcAnnot = structSrcAnnot
+{-# DEPRECATED unionSrcAnnot "Use structSrcAnnot." #-}
 
 -- | Exception types.
---
--- > exception UserDoesNotExist {
--- >     1: optional string message
--- >     2: required string username
--- > }
-data Exception srcAnnot = Exception
-    { exceptionName        :: Text
-    -- ^ Name of the exception.
-    , exceptionFields      :: [Field srcAnnot]
-    -- ^ Fields defined in the exception.
-    , exceptionAnnotations :: [TypeAnnotation]
-    -- ^ Annotations added to the exception.
-    , exceptionDocstring   :: Docstring
-    -- ^ Documentation.
-    , exceptionSrcAnnot    :: srcAnnot
-    }
-  deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
+type Exception = Struct
+{-# DEPRECATED Exception "The type has been consolidated into Struct." #-}
 
-instance HasName (Exception a) where
-    name = lens exceptionName (\s a -> s { exceptionName = a })
+exceptionName :: Exception a -> Text
+exceptionName = structName
+{-# DEPRECATED exceptionName "Use structName." #-}
 
-instance HasFields Exception where
-    fields = lens exceptionFields (\s a -> s { exceptionFields = a })
+exceptionFields :: Exception a -> [Field a]
+exceptionFields = structFields
+{-# DEPRECATED exceptionFields "Use structFields." #-}
 
-instance HasSrcAnnot Exception where
-    srcAnnot = lens exceptionSrcAnnot (\s a -> s { exceptionSrcAnnot = a })
+exceptionAnnotations :: Exception a -> [TypeAnnotation]
+exceptionAnnotations = structAnnotations
+{-# DEPRECATED exceptionAnnotations "Use structAnnotations." #-}
 
-instance HasDocstring (Exception a) where
-    docstring = lens exceptionDocstring (\s a -> s { exceptionDocstring = a })
+exceptionDocstring :: Exception a -> Docstring
+exceptionDocstring = structDocstring
+{-# DEPRECATED exceptionDocstring "Use structDocstring." #-}
 
-instance HasAnnotations (Exception a) where
-    annotations = lens exceptionAnnotations (\s a -> s { exceptionAnnotations = a })
+exceptionSrcAnnot :: Exception a -> a
+exceptionSrcAnnot = structSrcAnnot
+{-# DEPRECATED exceptionSrcAnnot "Use structSrcAnnot." #-}
 
 -- | An string-only enum. These are a deprecated feature of Thrift and
 -- shouldn't be used.
@@ -636,12 +654,8 @@ data Type srcAnnot
       TypedefType (Typedef srcAnnot)
     | -- | @enum@
       EnumType (Enum srcAnnot)
-    | -- | @struct@
+    | -- | @struct@/@union@/@exception@
       StructType (Struct srcAnnot)
-    | -- | @union@
-      UnionType (Union srcAnnot)
-    | -- | @exception@
-      ExceptionType (Exception srcAnnot)
     | -- | @senum@
       SenumType (Senum srcAnnot)
   deriving (Show, Ord, Eq, Data, Typeable, Generic, Functor)
@@ -652,15 +666,11 @@ instance HasName (Type a) where
         getter (TypedefType   t) = view name t
         getter (EnumType      t) = view name t
         getter (StructType    t) = view name t
-        getter (UnionType     t) = view name t
-        getter (ExceptionType t) = view name t
         getter (SenumType     t) = view name t
 
         setter (TypedefType   t) n = TypedefType   $ set name n t
         setter (EnumType      t) n = EnumType      $ set name n t
         setter (StructType    t) n = StructType    $ set name n t
-        setter (UnionType     t) n = UnionType     $ set name n t
-        setter (ExceptionType t) n = ExceptionType $ set name n t
         setter (SenumType     t) n = SenumType     $ set name n t
 
 instance HasSrcAnnot Type where
@@ -669,15 +679,11 @@ instance HasSrcAnnot Type where
         getter (TypedefType   t) = view srcAnnot t
         getter (EnumType      t) = view srcAnnot t
         getter (StructType    t) = view srcAnnot t
-        getter (UnionType     t) = view srcAnnot t
-        getter (ExceptionType t) = view srcAnnot t
         getter (SenumType     t) = view srcAnnot t
 
         setter (TypedefType   t) a = TypedefType   $ set srcAnnot a t
         setter (EnumType      t) a = EnumType      $ set srcAnnot a t
         setter (StructType    t) a = StructType    $ set srcAnnot a t
-        setter (UnionType     t) a = UnionType     $ set srcAnnot a t
-        setter (ExceptionType t) a = ExceptionType $ set srcAnnot a t
         setter (SenumType     t) a = SenumType     $ set srcAnnot a t
 
 -- | A definition either consists of new constants, new types, or new
