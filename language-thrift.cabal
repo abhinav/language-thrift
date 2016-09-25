@@ -46,7 +46,6 @@ library
         Language.Thrift.AST
         Language.Thrift.Parser
         Language.Thrift.Pretty
-        Language.Thrift.Types
     other-modules:
         Language.Thrift.Internal.AST
         Language.Thrift.Internal.Lens
@@ -81,7 +80,6 @@ test-suite spec
         Language.Thrift.Internal.Reserved
         Language.Thrift.Parser
         Language.Thrift.Pretty
-        Language.Thrift.Types
         Language.Thrift.Arbitrary
         Language.Thrift.ASTSpec
         Language.Thrift.ParserSpec

@@ -4,6 +4,7 @@
 -   Breaking: Consolidate struct, union, and exception AST types into a single
     data type: `Struct`. Whether the object is a struct, union, or exception is
     now determined by the `StructKind` attribute.
+-   Breaking: Deprecated module `Language.Thrift.Types` has now been removed.
 
 0.9.0.2 (2016-08-31)
 ====================
