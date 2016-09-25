@@ -1,4 +1,4 @@
-0.10.0.0 (unreleased)
+0.10.0.0 (2016-09-25)
 =====================
 
 -   Breaking: Consolidate struct, union, and exception AST types into a single

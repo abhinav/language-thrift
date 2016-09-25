@@ -1,6 +1,6 @@
 ---
 name: language-thrift
-version: 0.9.0.2
+version: 0.10.0.0
 license: BSD3
 author: Abhinav Gupta
 maintainer: Abhinav Gupta <mail@abhinavg.net>
