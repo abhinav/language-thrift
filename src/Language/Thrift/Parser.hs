@@ -91,9 +91,7 @@ type Parser s = StateT State (P.Parsec P.Dec s)
 
 -- | Evaluates the underlying parser with a default state and get the Megaparsec
 -- parser.
-runParser
-    :: (P.Stream s, P.Token s ~ Char)
-    => Parser s a -> P.Parsec P.Dec s a
+runParser :: P.Stream s => Parser s a -> P.Parsec P.Dec s a
 runParser p = State.evalStateT p (State Nothing)
 
 -- | Parses the Thrift file at the given path.
@@ -170,8 +168,7 @@ noneOf = P.noneOf
 
 -- | @p `skipUpTo` n@ skips @p@ @n@ times or until @p@ stops matching --
 -- whichever comes first.
-skipUpTo
-    :: (P.Stream s, P.Token s ~ Char) => Parser s a -> Int -> Parser s ()
+skipUpTo :: P.Stream s => Parser s a -> Int -> Parser s ()
 skipUpTo p = loop
   where
     loop 0 = return ()
@@ -362,9 +359,7 @@ namespace = P.choice
 -- | Convenience wrapper for parsers expecting a position.
 --
 -- The position will be retrieved BEFORE the parser itself is executed.
-withPosition
-    :: (P.Stream s, P.Token s ~ Char)
-    => Parser s (P.SourcePos -> a) -> Parser s a
+withPosition :: P.Stream s => Parser s (P.SourcePos -> a) -> Parser s a
 withPosition p = P.getPosition >>= \pos -> p <*> pure pos
 
 
@@ -373,9 +368,7 @@ withPosition p = P.getPosition >>= \pos -> p <*> pure pos
 -- > data Foo = Foo { bar :: Bar, doc :: Docstring, pos :: Delta }
 -- >
 -- > parseFoo = withDocstring $ Foo <$> parseBar
-withDocstring
-    :: (P.Stream s, P.Token s ~ Char)
-    => Parser s (T.Docstring -> P.SourcePos -> a) -> Parser s a
+withDocstring :: P.Stream s => Parser s (T.Docstring -> P.SourcePos -> a) -> Parser s a
 withDocstring p = lastDocstring >>= \s -> do
     pos <- P.getPosition
     p <*> pure s <*> pure pos
