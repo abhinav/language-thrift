@@ -67,13 +67,15 @@ import Control.Monad
 import Control.Monad.Trans.State (StateT)
 import Data.Scientific           (floatingOrInteger)
 import Data.Text                 (Text)
+import Data.Void (Void)
 
-import qualified Control.Monad.Trans.State as State
-import qualified Data.List.NonEmpty        as NonEmpty
-import qualified Data.Text                 as Text
-import qualified Data.Text.IO              as Text
-import qualified Text.Megaparsec           as P
-import qualified Text.Megaparsec.Lexer     as PL
+import qualified Control.Monad.Trans.State  as State
+import qualified Data.List.NonEmpty         as NonEmpty
+import qualified Data.Text                  as Text
+import qualified Data.Text.IO               as Text
+import qualified Text.Megaparsec            as P
+import qualified Text.Megaparsec.Char       as P
+import qualified Text.Megaparsec.Char.Lexer as PL
 
 import Language.Thrift.Internal.Reserved (isReserved)
 
@@ -87,17 +89,17 @@ data State = State
     deriving (Show, Eq)
 
 -- | Underlying Parser type.
-type Parser s = StateT State (P.Parsec P.Dec s)
+type Parser s = StateT State (P.Parsec (P.ErrorFancy Void) s)
 
 -- | Evaluates the underlying parser with a default state and get the Megaparsec
 -- parser.
-runParser :: P.Stream s => Parser s a -> P.Parsec P.Dec s a
+runParser :: P.Stream s => Parser s a -> P.Parsec (P.ErrorFancy Void) s a
 runParser p = State.evalStateT p (State Nothing)
 
 -- | Parses the Thrift file at the given path.
 parseFromFile
     :: FilePath
-    -> IO (Either (P.ParseError Char P.Dec) (T.Program P.SourcePos))
+    -> IO (Either (P.ParseError Char (P.ErrorFancy Void)) (T.Program P.SourcePos))
 parseFromFile path = P.runParser thriftIDL path <$> Text.readFile path
 
 -- | @parse name contents@ parses the contents of a Thrift document with name
@@ -105,13 +107,13 @@ parseFromFile path = P.runParser thriftIDL path <$> Text.readFile path
 parse
     :: (P.Stream s, P.Token s ~ Char)
     => FilePath
-    -> s -> Either (P.ParseError Char P.Dec) (T.Program P.SourcePos)
+    -> s -> Either (P.ParseError Char (P.ErrorFancy Void)) (T.Program P.SourcePos)
 parse = P.parse thriftIDL
 
 -- | Megaparsec parser that is able to parse full Thrift documents.
 thriftIDL
     :: (P.Stream s, P.Token s ~ Char)
-    => P.Parsec P.Dec s (T.Program P.SourcePos)
+    => P.Parsec (P.ErrorFancy Void) s (T.Program P.SourcePos)
 thriftIDL = runParser program
 
 
@@ -239,7 +241,7 @@ docstring = do
 
 
 symbolic :: (P.Stream s, P.Token s ~ Char) => Char -> Parser s ()
-symbolic c = void $ PL.symbol whiteSpace [c]
+symbolic c = void $ PL.symbol whiteSpace (Text.singleton c)
 
 token :: (P.Stream s, P.Token s ~ Char) => Parser s a -> Parser s a
 token = PL.lexeme whiteSpace
@@ -260,17 +262,17 @@ equals = symbolic '='
 
 -- | errorUnlessReserved ensures that the given identifier is in the
 -- reservedKeywords list. If it's not, we have a bug and we should crash.
-errorUnlessReserved :: Monad m => String -> m ()
+errorUnlessReserved :: Monad m => Text -> m ()
 errorUnlessReserved name =
     unless (isReserved name) $
         error ("reserved called with unreserved identifier " ++ show name)
 
 -- | Parses a reserved identifier and adds it to the collection of known
 -- reserved keywords.
-reserved :: (P.Stream s, P.Token s ~ Char) => String -> Parser s ()
+reserved :: (P.Stream s, P.Token s ~ Char) => Text -> Parser s ()
 reserved name =
     errorUnlessReserved name >>
-    P.label name $ token $ P.try $ do
+    P.label (Text.unpack name) $ token $ P.try $ do
         void (P.string name)
         P.notFollowedBy (P.alphaNumChar <|> oneOf "_.")
 
@@ -286,7 +288,7 @@ stringLiteral q = fmap Text.pack $
 
 
 integer :: (P.Stream s, P.Token s ~ Char) => Parser s Integer
-integer = token PL.integer
+integer = token PL.decimal
 
 
 -- | An identifier in a Thrift file.
@@ -529,7 +531,7 @@ constantValue = withPosition $ P.choice
   , T.ConstMap        <$> constMap
   ]
   where
-    signedNumber = floatingOrInteger <$> PL.signed whiteSpace PL.number
+    signedNumber = floatingOrInteger <$> PL.signed whiteSpace PL.scientific
 
 
 constList

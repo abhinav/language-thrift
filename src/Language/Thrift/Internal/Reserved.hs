@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Module      :  Language.Thrift.Internal.Reserved
 -- Copyright   :  (c) Abhinav Gupta 2016
@@ -11,13 +12,15 @@ module Language.Thrift.Internal.Reserved
     ( isReserved
     ) where
 
-import           Data.Set (Set)
+import Data.Set  (Set)
+import Data.Text (Text)
+
 import qualified Data.Set as Set
 
-isReserved :: String -> Bool
+isReserved :: Text -> Bool
 isReserved = (`Set.member` reservedKeywords)
 
-reservedKeywords :: Set String
+reservedKeywords :: Set Text
 reservedKeywords = Set.fromList
     [ "include"
     , "namespace"
