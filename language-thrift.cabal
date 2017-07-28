@@ -1,4 +1,4 @@
--- This file has been generated from package.yaml by hpack version 0.14.1.
+-- This file has been generated from package.yaml by hpack version 0.17.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -57,7 +57,7 @@ test-suite spec
     type: exitcode-stdio-1.0
     main-is: Main.hs
     hs-source-dirs:
-        src,
+        src
         test
     ghc-options: -Wall
     build-depends:
