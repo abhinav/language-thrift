@@ -6,6 +6,7 @@ module TestUtils
     ) where
 
 import Control.Monad (when)
+import Data.Void     (Void)
 import Test.Hspec    (expectationFailure)
 
 import qualified Language.Thrift.Parser as T
@@ -13,7 +14,7 @@ import qualified Text.Megaparsec        as P
 
 type Parser = T.Parser String
 
-parse :: Parser a -> String -> Either (P.ParseError Char P.Dec) a
+parse :: Parser a -> String -> Either (P.ParseErrorBundle String Void) a
 parse parser = P.parse (T.runParser parser) "memory"
 
 -- | @assertParses parser expected input@ will assert that running @parser@ on

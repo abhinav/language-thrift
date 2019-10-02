@@ -1,8 +1,0 @@
-flags: {}
-packages:
-- '.'
-- location: ../
-  extra-dep: true
-extra-deps:
-- megaparsec-5.0.0
-resolver: lts-6.12
