@@ -10,7 +10,8 @@ import Control.Applicative
 import Control.Monad
 import Data.Text       (pack)
 import Test.Hspec
-import Text.Megaparsec (SourcePos, eof, skipMany, spaceChar)
+import Text.Megaparsec (SourcePos, eof, skipMany)
+import Text.Megaparsec.Char (spaceChar)
 
 import TestUtils
 

@@ -65,15 +65,19 @@ module Language.Thrift.Parser
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.State (StateT)
+import Data.Functor              (($>))
+import Data.Proxy                (Proxy (Proxy))
 import Data.Scientific           (floatingOrInteger)
 import Data.Text                 (Text)
+import Data.Void                 (Void)
 
-import qualified Control.Monad.Trans.State as State
-import qualified Data.List.NonEmpty        as NonEmpty
-import qualified Data.Text                 as Text
-import qualified Data.Text.IO              as Text
-import qualified Text.Megaparsec           as P
-import qualified Text.Megaparsec.Lexer     as PL
+import qualified Control.Monad.Trans.State  as State
+import qualified Data.List.NonEmpty         as NonEmpty
+import qualified Data.Text                  as Text
+import qualified Data.Text.IO               as Text
+import qualified Text.Megaparsec            as P
+import qualified Text.Megaparsec.Char       as PC
+import qualified Text.Megaparsec.Char.Lexer as PL
 
 import Language.Thrift.Internal.Reserved (isReserved)
 
@@ -81,23 +85,23 @@ import qualified Language.Thrift.AST as T
 
 -- | Keeps track of the last docstring seen by the system so that we can
 -- attach it to entities.
-data State = State
+newtype State = State
     { stateDocstring :: T.Docstring
     }
     deriving (Show, Eq)
 
 -- | Underlying Parser type.
-type Parser s = StateT State (P.Parsec P.Dec s)
+type Parser s = StateT State (P.Parsec Void s)
 
 -- | Evaluates the underlying parser with a default state and get the Megaparsec
 -- parser.
-runParser :: P.Stream s => Parser s a -> P.Parsec P.Dec s a
+runParser :: P.Stream s => Parser s a -> P.Parsec Void s a
 runParser p = State.evalStateT p (State Nothing)
 
 -- | Parses the Thrift file at the given path.
 parseFromFile
     :: FilePath
-    -> IO (Either (P.ParseError Char P.Dec) (T.Program P.SourcePos))
+    -> IO (Either (P.ParseErrorBundle Text Void) (T.Program P.SourcePos))
 parseFromFile path = P.runParser thriftIDL path <$> Text.readFile path
 
 -- | @parse name contents@ parses the contents of a Thrift document with name
@@ -105,13 +109,13 @@ parseFromFile path = P.runParser thriftIDL path <$> Text.readFile path
 parse
     :: (P.Stream s, P.Token s ~ Char)
     => FilePath
-    -> s -> Either (P.ParseError Char P.Dec) (T.Program P.SourcePos)
+    -> s -> Either (P.ParseErrorBundle s Void) (T.Program P.SourcePos)
 parse = P.parse thriftIDL
 
 -- | Megaparsec parser that is able to parse full Thrift documents.
 thriftIDL
     :: (P.Stream s, P.Token s ~ Char)
-    => P.Parsec P.Dec s (T.Program P.SourcePos)
+    => P.Parsec Void s (T.Program P.SourcePos)
 thriftIDL = runParser program
 
 
@@ -140,20 +144,20 @@ someSpace = P.skipSome $ readDocstring <|> skipComments <|> skipSpace
             State.modify' (\st -> st { stateDocstring = Just s})
 
     skipSpace = P.choice
-      [ P.newline *> clearDocstring
-      , P.skipSome P.spaceChar
+      [ PC.newline *> clearDocstring
+      , P.skipSome PC.spaceChar
       ]
 
     skipComments = P.choice
-        [ P.char '#'            *> skipLine
-        , P.try (P.string "//") *> skipLine
-        , P.try (P.string "/*") *> skipCStyleComment
+        [ PC.char '#'            *> skipLine
+        , P.try (string "//") *> skipLine
+        , P.try (string "/*") *> skipCStyleComment
         ] *> clearDocstring
 
-    skipLine = void P.eol <|> P.eof <|> (P.anyChar *> skipLine)
+    skipLine = void PC.eol <|> P.eof <|> (P.anySingle *> skipLine)
 
     skipCStyleComment = P.choice
-      [ P.try (P.string "*/")    *> pure ()
+      [ P.try (string "*/")   $> ()
       , P.skipSome (noneOf "/*") *> skipCStyleComment
       , oneOf "/*"               *> skipCStyleComment
       ]
@@ -192,17 +196,17 @@ hspace = void $ oneOf " \t"
 --
 docstring :: (P.Stream s, P.Token s ~ Char) => Parser s Text
 docstring = do
-    P.try (P.string "/**") >> P.skipMany hspace
+    P.try (string "/**") >> P.skipMany hspace
     indent <- fromIntegral . P.unPos <$> PL.indentLevel
     isNewLine <- maybeEOL
     chunks <- loop isNewLine (indent - 1) []
     return $! Text.intercalate "\n" chunks
   where
-    maybeEOL = (P.eol >> return True) <|> return False
+    maybeEOL = (PC.eol >> return True) <|> return False
 
     commentChar =
         noneOf "*\r\n" <|>
-        P.try (P.char '*' <* P.notFollowedBy (P.char '/'))
+        P.try (PC.char '*' <* P.notFollowedBy (PC.char '/'))
 
     loop shouldDedent maxDedent chunks = do
         when shouldDedent $
@@ -210,8 +214,8 @@ docstring = do
         finishComment <|> readDocLine
       where
         finishComment = do
-            P.try (P.skipMany hspace <* P.string "*/")
-            void $ optional P.spaceChar
+            P.try (P.skipMany hspace <* string "*/")
+            void $ optional PC.spaceChar
             return $! reverse chunks
         readDocLine = do
             -- Lines could have aligned *s at the start.
@@ -227,7 +231,7 @@ docstring = do
             --
             -- So if foo starts with "*", we don't want to drop that.
             when shouldDedent . void $
-                optional $ P.try (P.char '*' >> optional hspace)
+                optional $ P.try (PC.char '*' >> optional hspace)
 
             line <- Text.pack <$> P.many commentChar
 
@@ -238,8 +242,8 @@ docstring = do
             loop True maxDedent (line:chunks)
 
 
-symbolic :: (P.Stream s, P.Token s ~ Char) => Char -> Parser s ()
-symbolic c = void $ PL.symbol whiteSpace [c]
+symbolic :: forall s. (P.Stream s, P.Token s ~ Char) => Char -> Parser s ()
+symbolic c = void $ PL.symbol whiteSpace (P.tokenToChunk (Proxy :: Proxy s) c)
 
 token :: (P.Stream s, P.Token s ~ Char) => Parser s a -> Parser s a
 token = PL.lexeme whiteSpace
@@ -271,8 +275,8 @@ reserved :: (P.Stream s, P.Token s ~ Char) => String -> Parser s ()
 reserved name =
     errorUnlessReserved name >>
     P.label name $ token $ P.try $ do
-        void (P.string name)
-        P.notFollowedBy (P.alphaNumChar <|> oneOf "_.")
+        void (string name)
+        P.notFollowedBy (PC.alphaNumChar <|> oneOf "_.")
 
 
 -- | A string literal. @"hello"@
@@ -282,19 +286,19 @@ literal = P.label "string literal" $ token $
 
 stringLiteral :: (P.Stream s, P.Token s ~ Char) => Char -> Parser s Text
 stringLiteral q = fmap Text.pack $
-    P.char q >> P.manyTill PL.charLiteral (P.char q)
+    PC.char q >> P.manyTill PL.charLiteral (PC.char q)
 
 
 integer :: (P.Stream s, P.Token s ~ Char) => Parser s Integer
-integer = token PL.integer
+integer = token PL.decimal
 
 
 -- | An identifier in a Thrift file.
 identifier :: (P.Stream s, P.Token s ~ Char) => Parser s Text
 identifier = P.label "identifier" $ token $ do
     name <- (:)
-        <$> (P.letterChar <|> P.char '_')
-        <*> many (P.alphaNumChar <|> oneOf "_.")
+        <$> (PC.letterChar <|> PC.char '_')
+        <*> many (PC.alphaNumChar <|> oneOf "_.")
     when (isReserved name) $
         P.unexpected (P.Label (NonEmpty.fromList name))
     return (Text.pack name)
@@ -360,7 +364,7 @@ namespace = P.choice
 --
 -- The position will be retrieved BEFORE the parser itself is executed.
 withPosition :: P.Stream s => Parser s (P.SourcePos -> a) -> Parser s a
-withPosition p = P.getPosition >>= \pos -> p <*> pure pos
+withPosition p = P.getSourcePos >>= \pos -> p <*> pure pos
 
 
 -- | Convenience wrapper for parsers that expect a docstring and a position.
@@ -370,7 +374,7 @@ withPosition p = P.getPosition >>= \pos -> p <*> pure pos
 -- > parseFoo = withDocstring $ Foo <$> parseBar
 withDocstring :: P.Stream s => Parser s (T.Docstring -> P.SourcePos -> a) -> Parser s a
 withDocstring p = lastDocstring >>= \s -> do
-    pos <- P.getPosition
+    pos <- P.getSourcePos
     p <*> pure s <*> pure pos
 
 
@@ -463,8 +467,8 @@ exception = struct
 fieldRequiredness
     :: (P.Stream s, P.Token s ~ Char) => Parser s T.FieldRequiredness
 fieldRequiredness = P.choice
-  [ reserved "required" *> pure T.Required
-  , reserved "optional" *> pure T.Optional
+  [ reserved "required" $> T.Required
+  , reserved "optional" $> T.Optional
   ]
 
 
@@ -520,7 +524,7 @@ constant = do
 constantValue
     :: (P.Stream s, P.Token s ~ Char) => Parser s (T.ConstValue P.SourcePos)
 constantValue = withPosition $ P.choice
-  [ P.try (P.string "0x") >> T.ConstInt <$> token PL.hexadecimal
+  [ P.try (string "0x") >> T.ConstInt <$> token PL.hexadecimal
   , either T.ConstFloat T.ConstInt
                       <$> token signedNumber
   , T.ConstLiteral    <$> literal
@@ -529,7 +533,7 @@ constantValue = withPosition $ P.choice
   , T.ConstMap        <$> constMap
   ]
   where
-    signedNumber = floatingOrInteger <$> PL.signed whiteSpace PL.number
+    signedNumber = floatingOrInteger <$> PL.signed whiteSpace PL.scientific
 
 
 constList
@@ -537,7 +541,7 @@ constList
 constList = symbolic '[' *> loop []
   where
     loop xs = P.choice
-      [ symbolic ']' *> return (reverse xs)
+      [ symbolic ']' $> reverse xs
       , (:) <$> (constantValue <* optionalSep)
             <*> pure xs
             >>= loop
@@ -550,7 +554,7 @@ constMap
 constMap = symbolic '{' *> loop []
   where
     loop xs = P.choice [
-        symbolic '}' *> return (reverse xs)
+        symbolic '}' $> reverse xs
       , (:) <$> (constantValuePair <* optionalSep)
             <*> pure xs
             >>= loop
@@ -632,8 +636,8 @@ function
     :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Function P.SourcePos)
 function = withDocstring $
     T.Function
-        <$> ((reserved "oneway" *> pure True) <|> pure False)
-        <*> ((reserved "void" *> pure Nothing) <|> Just <$> typeReference)
+        <$> ((reserved "oneway" $> True) <|> pure False)
+        <*> ((reserved "void" $> Nothing) <|> Just <$> typeReference)
         <*> identifier
         <*> parens (many field)
         <*> optional (reserved "throws" *> parens (many field))
@@ -661,3 +665,6 @@ typeAnnotation =
 
 optionalSep :: (P.Stream s, P.Token s ~ Char) => Parser s ()
 optionalSep = void $ optional (comma <|> semi)
+
+string :: forall s. (P.Stream s, P.Token s ~ Char) => String -> Parser s (P.Tokens s)
+string = PC.string . P.tokensToChunk (Proxy :: Proxy s)

@@ -1,7 +1,3 @@
-flags: {}
-packages:
-- '.'
-- location: ../
-  extra-dep: true
-extra-deps: []
-resolver: lts-9.0
+resolver: lts-14.7
+extra-deps:
+  - ../
