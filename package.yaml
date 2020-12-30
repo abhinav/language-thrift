@@ -43,6 +43,7 @@ tests:
     main: Main.hs
     dependencies:
       - hspec >= 2.0
-      - hspec-discover >= 2.1
       - language-thrift
       - QuickCheck >= 2.5
+    build-tools:
+      - hspec-discover:hspec-discover >= 2.1
