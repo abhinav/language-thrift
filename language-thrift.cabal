@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5718ef03c6225580c4a6dd90b7e2c6a6536e62f0e58c185dc9f62c9f2c94907d
+-- hash: d80a1a764a9011be77762ba5390e28715af67b898b56b31e76b9845e55684958
 
 name:           language-thrift
-version:        0.11.0.0
+version:        0.12.0.0
 synopsis:       Parser and pretty printer for the Thrift IDL format.
 description:    This package provides a parser and pretty printer for the
                 <http://thrift.apache.org/docs/idl Thrift IDL format>.
