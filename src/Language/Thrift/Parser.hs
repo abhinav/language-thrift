@@ -107,14 +107,14 @@ parseFromFile path = P.runParser thriftIDL path <$> Text.readFile path
 -- | @parse name contents@ parses the contents of a Thrift document with name
 -- @name@ held in @contents@.
 parse
-    :: (P.Stream s, P.Token s ~ Char)
+    :: (P.TraversableStream s, P.Token s ~ Char)
     => FilePath
     -> s -> Either (P.ParseErrorBundle s Void) (T.Program P.SourcePos)
 parse = P.parse thriftIDL
 
 -- | Megaparsec parser that is able to parse full Thrift documents.
 thriftIDL
-    :: (P.Stream s, P.Token s ~ Char)
+    :: (P.TraversableStream s, P.Token s ~ Char)
     => P.Parsec Void s (T.Program P.SourcePos)
 thriftIDL = runParser program
 
@@ -131,11 +131,11 @@ lastDocstring = do
     return s
 
 -- | Optional whitespace.
-whiteSpace :: (P.Stream s, P.Token s ~ Char) => Parser s ()
+whiteSpace :: (P.TraversableStream s, P.Token s ~ Char) => Parser s ()
 whiteSpace = someSpace <|> pure ()
 
 -- | Required whitespace.
-someSpace :: (P.Stream s, P.Token s ~ Char) => Parser s ()
+someSpace :: (P.TraversableStream s, P.Token s ~ Char) => Parser s ()
 someSpace = P.skipSome $ readDocstring <|> skipComments <|> skipSpace
   where
     readDocstring = do
@@ -194,7 +194,7 @@ hspace = void $ oneOf " \t"
 -- This parses attempts to preserve indentation inside the docstring while
 -- getting rid of the aligned @*@s (if any) and any other preceding space.
 --
-docstring :: (P.Stream s, P.Token s ~ Char) => Parser s Text
+docstring :: (P.TraversableStream s, P.Token s ~ Char) => Parser s Text
 docstring = do
     P.try (string "/**") >> P.skipMany hspace
     indent <- fromIntegral . P.unPos <$> PL.indentLevel
@@ -242,20 +242,20 @@ docstring = do
             loop True maxDedent (line:chunks)
 
 
-symbolic :: forall s. (P.Stream s, P.Token s ~ Char) => Char -> Parser s ()
+symbolic :: forall s. (P.TraversableStream s, P.Token s ~ Char) => Char -> Parser s ()
 symbolic c = void $ PL.symbol whiteSpace (P.tokenToChunk (Proxy :: Proxy s) c)
 
-token :: (P.Stream s, P.Token s ~ Char) => Parser s a -> Parser s a
+token :: (P.TraversableStream s, P.Token s ~ Char) => Parser s a -> Parser s a
 token = PL.lexeme whiteSpace
 
 braces, angles, parens
-    :: (P.Stream s, P.Token s ~ Char) => Parser s a -> Parser s a
+    :: (P.TraversableStream s, P.Token s ~ Char) => Parser s a -> Parser s a
 
 braces = P.between (symbolic '{') (symbolic '}')
 angles = P.between (symbolic '<') (symbolic '>')
 parens = P.between (symbolic '(') (symbolic ')')
 
-comma, semi, colon, equals :: (P.Stream s, P.Token s ~ Char) => Parser s ()
+comma, semi, colon, equals :: (P.TraversableStream s, P.Token s ~ Char) => Parser s ()
 
 comma  = symbolic ','
 semi   = symbolic ';'
@@ -271,7 +271,7 @@ errorUnlessReserved name =
 
 -- | Parses a reserved identifier and adds it to the collection of known
 -- reserved keywords.
-reserved :: (P.Stream s, P.Token s ~ Char) => String -> Parser s ()
+reserved :: (P.TraversableStream s, P.Token s ~ Char) => String -> Parser s ()
 reserved name =
     errorUnlessReserved name >>
     P.label name $ token $ P.try $ do
@@ -280,7 +280,7 @@ reserved name =
 
 
 -- | A string literal. @"hello"@
-literal :: (P.Stream s, P.Token s ~ Char) => Parser s Text
+literal :: (P.TraversableStream s, P.Token s ~ Char) => Parser s Text
 literal = P.label "string literal" $ token $
     stringLiteral '"' <|> stringLiteral '\''
 
@@ -289,12 +289,12 @@ stringLiteral q = fmap Text.pack $
     PC.char q >> P.manyTill PL.charLiteral (PC.char q)
 
 
-integer :: (P.Stream s, P.Token s ~ Char) => Parser s Integer
+integer :: (P.TraversableStream s, P.Token s ~ Char) => Parser s Integer
 integer = token PL.decimal
 
 
 -- | An identifier in a Thrift file.
-identifier :: (P.Stream s, P.Token s ~ Char) => Parser s Text
+identifier :: (P.TraversableStream s, P.Token s ~ Char) => Parser s Text
 identifier = P.label "identifier" $ token $ do
     name <- (:)
         <$> (PC.letterChar <|> PC.char '_')
@@ -305,7 +305,7 @@ identifier = P.label "identifier" $ token $ do
 
 
 -- | Top-level parser to parse complete Thrift documents.
-program :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Program P.SourcePos)
+program :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Program P.SourcePos)
 program = whiteSpace >>
     T.Program
         <$> many (header     <* optionalSep)
@@ -313,7 +313,7 @@ program = whiteSpace >>
         <*  P.eof
 
 -- | Headers defined for the IDL.
-header :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Header P.SourcePos)
+header :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Header P.SourcePos)
 header = P.choice
   [ T.HeaderInclude   <$> include
   , T.HeaderNamespace <$> namespace
@@ -326,7 +326,7 @@ header = P.choice
 -- >
 -- > typedef common.Foo Bar
 --
-include :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Include P.SourcePos)
+include :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Include P.SourcePos)
 include = reserved "include" >> withPosition (T.Include <$> literal)
 
 
@@ -335,7 +335,7 @@ include = reserved "include" >> withPosition (T.Include <$> literal)
 --
 -- > namespace py my_service.generated
 namespace
-    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Namespace P.SourcePos)
+    :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Namespace P.SourcePos)
 namespace = P.choice
   [ reserved "namespace" >>
     withPosition (T.Namespace <$> (star <|> identifier) <*> identifier)
@@ -363,7 +363,7 @@ namespace = P.choice
 -- | Convenience wrapper for parsers expecting a position.
 --
 -- The position will be retrieved BEFORE the parser itself is executed.
-withPosition :: P.Stream s => Parser s (P.SourcePos -> a) -> Parser s a
+withPosition :: P.TraversableStream s => Parser s (P.SourcePos -> a) -> Parser s a
 withPosition p = P.getSourcePos >>= \pos -> p <*> pure pos
 
 
@@ -372,7 +372,7 @@ withPosition p = P.getSourcePos >>= \pos -> p <*> pure pos
 -- > data Foo = Foo { bar :: Bar, doc :: Docstring, pos :: Delta }
 -- >
 -- > parseFoo = withDocstring $ Foo <$> parseBar
-withDocstring :: P.Stream s => Parser s (T.Docstring -> P.SourcePos -> a) -> Parser s a
+withDocstring :: P.TraversableStream s => Parser s (T.Docstring -> P.SourcePos -> a) -> Parser s a
 withDocstring p = lastDocstring >>= \s -> do
     pos <- P.getSourcePos
     p <*> pure s <*> pure pos
@@ -380,7 +380,7 @@ withDocstring p = lastDocstring >>= \s -> do
 
 -- | A constant, type, or service definition.
 definition
-    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Definition P.SourcePos)
+    :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Definition P.SourcePos)
 definition = whiteSpace >> P.choice
     [ T.ConstDefinition   <$> constant
     , T.TypeDefinition    <$> typeDefinition
@@ -390,7 +390,7 @@ definition = whiteSpace >> P.choice
 
 -- | A type definition.
 typeDefinition
-    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Type P.SourcePos)
+    :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Type P.SourcePos)
 typeDefinition = P.choice
     [ T.TypedefType <$> typedef
     , T.EnumType    <$> enum
@@ -402,7 +402,7 @@ typeDefinition = P.choice
 -- | A typedef is just an alias for another type.
 --
 -- > typedef common.Foo Bar
-typedef :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Typedef P.SourcePos)
+typedef :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Typedef P.SourcePos)
 typedef = reserved "typedef" >> withDocstring
     (T.Typedef <$> typeReference <*> identifier <*> typeAnnotations)
 
@@ -412,7 +412,7 @@ typedef = reserved "typedef" >> withDocstring
 -- > enum Role {
 -- >     User = 1, Admin
 -- >
-enum :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Enum P.SourcePos)
+enum :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Enum P.SourcePos)
 enum = reserved "enum" >> withDocstring
     ( T.Enum
         <$> identifier
@@ -437,7 +437,7 @@ enum = reserved "enum" >> withDocstring
 -- >     1: optional string message
 -- >     2: required string username
 -- > }
-struct :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
+struct :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
 struct = kind >>= \k -> withDocstring
     ( T.Struct k
         <$> identifier
@@ -453,19 +453,19 @@ struct = kind >>= \k -> withDocstring
 
 
 -- | A @union@ of types.
-union :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
+union :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
 union = struct
 {-# DEPRECATED union "Use struct." #-}
 
 -- | An @exception@ that can be raised by service methods.
-exception :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
+exception :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Struct P.SourcePos)
 exception = struct
 {-# DEPRECATED exception"Use struct." #-}
 
 
 -- | Whether a field is @required@ or @optional@.
 fieldRequiredness
-    :: (P.Stream s, P.Token s ~ Char) => Parser s T.FieldRequiredness
+    :: (P.TraversableStream s, P.Token s ~ Char) => Parser s T.FieldRequiredness
 fieldRequiredness = P.choice
   [ reserved "required" $> T.Required
   , reserved "optional" $> T.Optional
@@ -473,7 +473,7 @@ fieldRequiredness = P.choice
 
 
 -- | A struct field.
-field :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Field P.SourcePos)
+field :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Field P.SourcePos)
 field = withDocstring $
   T.Field
     <$> optional (integer <* colon)
@@ -486,7 +486,7 @@ field = withDocstring $
 
 
 -- | A value defined inside an @enum@.
-enumDef :: (P.Stream s, P.Token s ~ Char) => Parser s (T.EnumDef P.SourcePos)
+enumDef :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.EnumDef P.SourcePos)
 enumDef = withDocstring $
   T.EnumDef
     <$> identifier
@@ -497,7 +497,7 @@ enumDef = withDocstring $
 
 -- | An string-only enum. These are a deprecated feature of Thrift and shouldn't
 -- be used.
-senum :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Senum P.SourcePos)
+senum :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Senum P.SourcePos)
 senum = reserved "senum" >> withDocstring
     ( T.Senum
         <$> identifier
@@ -509,7 +509,7 @@ senum = reserved "senum" >> withDocstring
 -- | A 'const' definition.
 --
 -- > const i32 code = 1;
-constant :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Const P.SourcePos)
+constant :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Const P.SourcePos)
 constant = do
   reserved "const"
   withDocstring $
@@ -522,7 +522,7 @@ constant = do
 
 -- | A constant value literal.
 constantValue
-    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.ConstValue P.SourcePos)
+    :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.ConstValue P.SourcePos)
 constantValue = withPosition $ P.choice
   [ P.try (string "0x") >> T.ConstInt <$> token PL.hexadecimal
   , either T.ConstFloat T.ConstInt
@@ -537,7 +537,7 @@ constantValue = withPosition $ P.choice
 
 
 constList
-    :: (P.Stream s, P.Token s ~ Char) => Parser s [T.ConstValue P.SourcePos]
+    :: (P.TraversableStream s, P.Token s ~ Char) => Parser s [T.ConstValue P.SourcePos]
 constList = symbolic '[' *> loop []
   where
     loop xs = P.choice
@@ -549,7 +549,7 @@ constList = symbolic '[' *> loop []
 
 
 constMap
-    :: (P.Stream s, P.Token s ~ Char)
+    :: (P.TraversableStream s, P.Token s ~ Char)
     => Parser s [(T.ConstValue P.SourcePos, T.ConstValue P.SourcePos)]
 constMap = symbolic '{' *> loop []
   where
@@ -562,7 +562,7 @@ constMap = symbolic '{' *> loop []
 
 
 constantValuePair
-    :: (P.Stream s, P.Token s ~ Char)
+    :: (P.TraversableStream s, P.Token s ~ Char)
     => Parser s (T.ConstValue P.SourcePos, T.ConstValue P.SourcePos)
 constantValuePair =
     (,) <$> (constantValue <* colon)
@@ -571,7 +571,7 @@ constantValuePair =
 
 -- | A reference to a built-in or defined field.
 typeReference
-    :: (P.Stream s, P.Token s ~ Char)
+    :: (P.TraversableStream s, P.Token s ~ Char)
     => Parser s (T.TypeReference P.SourcePos)
 typeReference = P.choice
   [ baseType
@@ -581,7 +581,7 @@ typeReference = P.choice
 
 
 baseType
-    :: (P.Stream s, P.Token s ~ Char)
+    :: (P.TraversableStream s, P.Token s ~ Char)
     => Parser s (T.TypeReference P.SourcePos)
 baseType = withPosition $
     P.choice [reserved s *> (v <$> typeAnnotations) | (s, v) <- bases]
@@ -601,7 +601,7 @@ baseType = withPosition $
 
 
 containerType
-    :: (P.Stream s, P.Token s ~ Char)
+    :: (P.TraversableStream s, P.Token s ~ Char)
     => Parser s (T.TypeReference P.SourcePos)
 containerType = withPosition $
     P.choice [mapType, setType, listType] <*> typeAnnotations
@@ -617,7 +617,7 @@ containerType = withPosition $
 -- > service MyService {
 -- >     // ...
 -- > }
-service :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Service P.SourcePos)
+service :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Service P.SourcePos)
 service = do
   reserved "service"
   withDocstring $
@@ -633,7 +633,7 @@ service = do
 -- > Foo getFoo() throws (1: FooDoesNotExist doesNotExist);
 -- > oneway void putBar(1: Bar bar);
 function
-    :: (P.Stream s, P.Token s ~ Char) => Parser s (T.Function P.SourcePos)
+    :: (P.TraversableStream s, P.Token s ~ Char) => Parser s (T.Function P.SourcePos)
 function = withDocstring $
     T.Function
         <$> ((reserved "oneway" $> True) <|> pure False)
@@ -652,18 +652,18 @@ function = withDocstring $
 -- These do not usually affect code generation but allow for custom logic if
 -- writing your own code generator.
 typeAnnotations
-    :: (P.Stream s, P.Token s ~ Char) => Parser s [T.TypeAnnotation]
+    :: (P.TraversableStream s, P.Token s ~ Char) => Parser s [T.TypeAnnotation]
 typeAnnotations = parens (many typeAnnotation) <|> pure []
 
 
-typeAnnotation :: (P.Stream s, P.Token s ~ Char) => Parser s T.TypeAnnotation
+typeAnnotation :: (P.TraversableStream s, P.Token s ~ Char) => Parser s T.TypeAnnotation
 typeAnnotation =
     T.TypeAnnotation
         <$> identifier
         <*> (optional (equals *> literal) <* optionalSep)
 
 
-optionalSep :: (P.Stream s, P.Token s ~ Char) => Parser s ()
+optionalSep :: (P.TraversableStream s, P.Token s ~ Char) => Parser s ()
 optionalSep = void $ optional (comma <|> semi)
 
 string :: forall s. (P.Stream s, P.Token s ~ Char) => String -> Parser s (P.Tokens s)
