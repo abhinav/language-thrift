@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.2.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d80a1a764a9011be77762ba5390e28715af67b898b56b31e76b9845e55684958
+-- hash: b6a581131f0ad708168122fef6e6a9714543736e89057fcbd990fd8eb2f149e0
 
 name:           language-thrift
 version:        0.12.0.0
@@ -45,12 +45,12 @@ library
       src
   ghc-options: -Wall
   build-depends:
-      ansi-wl-pprint >=0.6 && <0.7
+      ansi-wl-pprint ==0.6.*
     , base >=4.7 && <5
     , containers >=0.5 && <0.7
     , megaparsec >=9.0 && <10.0
-    , scientific >=0.3 && <0.4
-    , semigroups >=0.18 && <0.20
+    , scientific ==0.3.*
+    , semigroups >=0.18 && <0.21
     , text >=1.2
     , transformers
   default-language: Haskell2010
@@ -66,14 +66,14 @@ test-suite spec
       hspec-discover:hspec-discover >=2.1
   build-depends:
       QuickCheck >=2.5
-    , ansi-wl-pprint >=0.6 && <0.7
+    , ansi-wl-pprint ==0.6.*
     , base >=4.7 && <5
     , containers >=0.5 && <0.7
     , hspec >=2.0
     , language-thrift
     , megaparsec >=9.0 && <10.0
-    , scientific >=0.3 && <0.4
-    , semigroups >=0.18 && <0.20
+    , scientific ==0.3.*
+    , semigroups >=0.18 && <0.21
     , text >=1.2
     , transformers
   other-modules:
