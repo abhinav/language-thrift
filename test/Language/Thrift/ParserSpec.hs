@@ -32,7 +32,7 @@ spec = describe "Parser" $ do
             ]
 
     it "can parse docstrings" $ forM_
-        [ ( return "/** foo */", "foo " )
+        [ ( return "/** foo */", "foo" )
         , ( return "/** foo\n */", "foo" )
         , ( readFile "test/data/docstring-1.txt"
           , "Hello. This is the first\n" ++
