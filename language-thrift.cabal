@@ -1,13 +1,13 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
+-- This file has been generated from package.yaml by hpack version 0.36.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3e937cba14cc7d2b64284d4ab69cac1944266faa7871aa91fbd6c4800138236e
+-- hash: bcd2435f3966b5f41ce6a7537716d75c2f9d49461f232f94bc99d7508746aa7e
 
 name:           language-thrift
-version:        0.12.0.1
+version:        0.13.0.0
 synopsis:       Parser and pretty printer for the Thrift IDL format.
 description:    This package provides a parser and pretty printer for the
                 <http://thrift.apache.org/docs/idl Thrift IDL format>.
@@ -66,12 +66,12 @@ test-suite spec
       hspec-discover:hspec-discover >=2.1
   build-depends:
       QuickCheck >=2.5
-    , prettyprinter-compat-ansi-wl-pprint >=1.0 && <2.0
     , base >=4.7 && <5
     , containers >=0.5 && <0.7
     , hspec >=2.0
     , language-thrift
     , megaparsec >=9.0 && <10.0
+    , prettyprinter-compat-ansi-wl-pprint >=1.0 && <2.0
     , scientific ==0.3.*
     , semigroups >=0.18 && <0.21
     , text >=1.2

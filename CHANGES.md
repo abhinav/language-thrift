@@ -1,7 +1,13 @@
+0.13.0.0 (2024-04-05)
+=====================
+
+-   ([#18](https://github.com/abhinav/language-thrift/pull/18))
+    Migrate pretty printer to `prettyprinter`.
+
 0.12.0.1 (2021-12-04)
 =====================
 
-- Allow semigroups 0.20
+-   Allow semigroups 0.20
 
 0.12.0.0 (2020-12-31)
 =====================
