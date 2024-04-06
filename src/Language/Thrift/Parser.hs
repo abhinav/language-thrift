@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 -- |
 -- Module      :  Language.Thrift.Parser
 -- Copyright   :  (c) Abhinav Gupta 2016
@@ -38,6 +39,7 @@ module Language.Thrift.Parser
     , include
     , namespace
 
+    , functionParameters
     , definition
     , constant
     , typeDefinition
@@ -200,7 +202,7 @@ docstring = do
     indent <- fromIntegral . P.unPos <$> PL.indentLevel
     isNewLine <- maybeEOL
     chunks <- loop isNewLine (indent - 1) []
-    return $! Text.intercalate "\n" chunks
+    return $! Text.intercalate "\n" (Text.dropWhileEnd (== ' ') <$> chunks)
   where
     maybeEOL = (PC.eol >> return True) <|> return False
 
@@ -639,11 +641,15 @@ function = withDocstring $
         <$> ((reserved "oneway" $> True) <|> pure False)
         <*> ((reserved "void" $> Nothing) <|> Just <$> typeReference)
         <*> identifier
-        <*> parens (many field)
+        <*> functionParameters
         <*> optional (reserved "throws" *> parens (many field))
         <*> typeAnnotations
         <*  optionalSep
 
+functionParameters
+    :: (P.TraversableStream s, P.Token s ~ Char)
+    => Parser s [T.Field P.SourcePos]
+functionParameters = parens $ many field
 
 -- | Type annotations on entitites.
 --

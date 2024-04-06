@@ -43,12 +43,12 @@ library
       Paths_language_thrift
   hs-source-dirs:
       src
-  ghc-options: -Wall
+  ghc-options: -Wall -Wunused-packages
   build-depends:
-      ansi-wl-pprint ==0.6.*
-    , base >=4.7 && <5
+      base >=4.7 && <5
     , containers >=0.5 && <0.7
     , megaparsec >=9.0 && <10.0
+    , prettyprinter-compat-ansi-wl-pprint >=1.0 && <2.0
     , scientific ==0.3.*
     , semigroups >=0.18 && <0.21
     , text >=1.2
@@ -61,12 +61,12 @@ test-suite spec
   hs-source-dirs:
       src
       test
-  ghc-options: -Wall
+  ghc-options: -Wall -Wunused-packages
   build-tool-depends:
       hspec-discover:hspec-discover >=2.1
   build-depends:
       QuickCheck >=2.5
-    , ansi-wl-pprint ==0.6.*
+    , prettyprinter-compat-ansi-wl-pprint >=1.0 && <2.0
     , base >=4.7 && <5
     , containers >=0.5 && <0.7
     , hspec >=2.0

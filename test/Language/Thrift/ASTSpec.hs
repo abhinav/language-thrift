@@ -1,15 +1,22 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
+
 module Language.Thrift.ASTSpec (spec) where
 
 import Control.Monad         (void)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Text.Megaparsec       (SourcePos)
+import Test.QuickCheck       (Arbitrary(..))
 
 import qualified Text.PrettyPrint.ANSI.Leijen as PP (Doc, plain)
 
 import Language.Thrift.Arbitrary ()
+import Language.Thrift.AST       (Field(..))
 import TestUtils
+import Data.Functor.Const
 
 import qualified Language.Thrift.Parser as P
 import qualified Language.Thrift.Pretty as PP
@@ -48,9 +55,26 @@ spec =
         prop "can round-trip namespaces" $
             roundtrip (const PP.namespace) (P.whiteSpace >> P.namespace)
 
+        prop "can round-trip docstrings" $
+            roundtrip (const $ PP.docstring . getConst) (Const <$> P.docstring)
+
+        prop "can round-trip function params" $
+            roundtrip
+            (\conf -> PP.functionParameters conf . getFunctionParams)
+            (FunctionParams <$> P.functionParameters)
+
         prop "can round-trip documents" $
             roundtrip PP.program P.program
 
+-- We could alternatively just use Data.Functor.Compose, but then
+-- we'd have to implement Eq1 for a bunch of things, which is a whole
+-- world of pain.
+newtype FunctionParams a
+    = FunctionParams { getFunctionParams :: [Field a] }
+    deriving (Functor, Eq, Show)
+
+instance Arbitrary (FunctionParams ()) where
+    arbitrary = FunctionParams <$> arbitrary
 
 roundtrip
     :: (Show (n ()), Eq (n ()), Functor n)
@@ -58,6 +82,6 @@ roundtrip
     -> Parser (n SourcePos)
     -> n ()
     -> IO ()
-roundtrip printer parser value =
-    assertParses (void `fmap` parser) value
+roundtrip printer parser value
+    = assertParses (void `fmap` parser) value
         (show . PP.plain $ printer (PP.Config 4) value)
